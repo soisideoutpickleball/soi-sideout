@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="color-scheme" content="light">
+<title>Soi Sideout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#F5EFE4;
+    --cream-card:#FFFBF3;
+    --maroon:#8B1E1E;
+    --maroon-dark:#6E1717;
+    --olive:#5B6E4E;
+    --olive-light:#7C8F68;
+    --ink:#3A2E26;
+    --mustard:#E0A72E;
+    --line:#E8DCC8;
+    --danger:#B23B3B;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{color-scheme:light;}
+  body{
+    font-family:'Noto Sans Thai','Inter',sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:60px;
+  }
+  .display{font-family:'Baloo 2','Noto Sans Thai',sans-serif;}
+  .wrap{max-width:480px;margin:0 auto;padding:16px;}
+  button{font-family:inherit;}
+  input,select{font-family:inherit;}
+
+  /* ===== HEADER ===== */
+  .topbar{display:flex;justify-content:space-between;align-items:center;padding:6px 2px 18px;}
+  .brand{display:flex;align-items:center;gap:9px;}
+  .brand-mark{
+    width:38px;height:38px;border-radius:12px;background:var(--maroon);
+    display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;
+    box-shadow:0 3px 0 var(--maroon-dark);color:#fff;overflow:hidden;
+  }
+  .brand-mark img{width:100%;height:100%;object-fit:cover;}
+  .brand-text .name{font-family:'Baloo 2';font-weight:700;font-size:19px;color:var(--ink);line-height:1.1;}
+  .brand-text .sub{font-size:11px;color:var(--olive);font-weight:600;margin-top:1px;}
+  .admin-btn{
+    font-size:12px;font-weight:600;color:var(--ink);background:var(--cream-card);
+    border:1.5px solid var(--line);padding:8px 14px;border-radius:20px;cursor:pointer;white-space:nowrap;
+  }
+  .admin-btn.logged{background:var(--maroon);color:#fff;border-color:var(--maroon-dark);}
+
+  /* ===== BANNER ===== */
+  .banner{
+    background:var(--olive);border-radius:20px;padding:16px 18px;margin-bottom:18px;
+    position:relative;overflow:hidden;box-shadow:0 4px 0 #47563A;
+  }
+  .banner.live{background:var(--maroon);box-shadow:0 4px 0 var(--maroon-dark);}
+  .banner::after{content:'🏓';position:absolute;right:-10px;bottom:-18px;font-size:80px;opacity:0.14;transform:rotate(-12deg);}
+  .banner-eyebrow{font-size:11px;font-weight:700;color:#E9F0DF;text-transform:uppercase;letter-spacing:0.6px;display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+  .banner-eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--mustard);display:inline-block;}
+  .banner-eyebrow .dot.pulse{animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+  .banner-title{font-family:'Baloo 2';font-weight:700;font-size:20px;color:#fff;line-height:1.25;position:relative;z-index:1;}
+  .banner-meta{display:flex;gap:14px;margin-top:9px;position:relative;z-index:1;flex-wrap:wrap;}
+  .banner-meta span{font-size:12.5px;color:#EAF0E1;font-weight:600;display:flex;align-items:center;gap:5px;}
+
+  /* ===== SEARCH / FILTER ===== */
+  .search-box{display:flex;align-items:center;gap:8px;background:var(--cream-card);border:1.5px solid var(--line);border-radius:16px;padding:11px 14px;margin-bottom:12px;}
+  .search-box input{border:none;background:transparent;outline:none;font-size:14px;color:var(--ink);width:100%;}
+  .search-box input::placeholder{color:#B3A594;}
+  .filter-row{display:flex;align-items:center;gap:8px;margin-bottom:18px;}
+  .pill-group{display:flex;gap:6px;flex:1;}
+  .pill{font-size:12.5px;font-weight:700;padding:8px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--cream-card);color:var(--ink);cursor:pointer;}
+  .pill.active{background:var(--maroon);border-color:var(--maroon-dark);color:#fff;}
+  .filter-btn{font-size:12.5px;font-weight:700;color:var(--ink);background:var(--cream-card);border:1.5px solid var(--line);padding:8px 12px;border-radius:14px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:5px;}
+  .filter-badge{background:var(--mustard);color:var(--ink);font-size:10px;font-weight:800;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+
+  .section-label{font-size:11px;font-weight:700;color:var(--olive);text-transform:uppercase;letter-spacing:0.6px;margin:4px 0 10px 4px;display:flex;justify-content:space-between;align-items:center;}
+
+  /* ===== LEADERBOARD ===== */
+  .board{display:flex;flex-direction:column;gap:9px;}
+  .card{display:flex;align-items:center;gap:12px;background:var(--cream-card);border:1.5px solid var(--line);border-radius:18px;padding:12px 14px;cursor:pointer;}
+  .card.top1{background:linear-gradient(135deg,var(--maroon),#A93030);border-color:var(--maroon-dark);box-shadow:0 3px 0 var(--maroon-dark);}
+  .card.top2{background:#FFF3E2;border-color:#F0D9B8;}
+  .card.top3{background:#FBF6EA;border-color:#EDE0C4;}
+  .rank-badge{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2';font-weight:700;font-size:14px;flex-shrink:0;background:var(--cream);color:var(--ink);border:1.5px solid var(--line);}
+  .card.top1 .rank-badge{background:var(--mustard);color:var(--ink);border:none;font-size:17px;}
+  .card.top2 .rank-badge{background:#E7C9A3;border-color:#DEBB8E;}
+  .card.top3 .rank-badge{background:#E4CFA3;border-color:#D8BE8B;}
+  .card-info{flex:1;min-width:0;}
+  .card-name{font-weight:700;font-size:14.5px;color:var(--ink);display:flex;align-items:center;gap:6px;}
+  .card.top1 .card-name{color:#fff;}
+  .gender-tag{font-size:9.5px;font-weight:700;padding:1.5px 6px;border-radius:8px;background:var(--cream);color:var(--olive);}
+  .card.top1 .gender-tag{background:rgba(255,255,255,0.25);color:#fff;}
+  .card-sub{font-size:11.5px;color:#8A7D6C;font-weight:600;margin-top:2px;}
+  .card.top1 .card-sub{color:rgba(255,255,255,0.85);}
+  .card-stats{text-align:right;flex-shrink:0;}
+  .stat-score{font-family:'Baloo 2';font-weight:700;font-size:17px;color:var(--maroon);}
+  .card.top1 .stat-score{color:#fff;}
+  .stat-winrate{font-size:11px;font-weight:700;color:var(--olive);margin-top:1px;}
+  .card.top1 .stat-winrate{color:#F4E9D8;}
+  .empty-note{text-align:center;padding:30px 10px;color:#B3A594;font-size:13px;font-weight:600;}
+  .footer-note{text-align:center;font-size:11px;color:#B3A594;margin-top:22px;font-weight:500;}
+
+  /* ===== BUTTONS ===== */
+  .btn{padding:12px 18px;border-radius:14px;font-weight:700;font-size:13.5px;border:none;cursor:pointer;}
+  .btn-primary{background:var(--maroon);color:#fff;box-shadow:0 3px 0 var(--maroon-dark);}
+  .btn-outline{background:var(--cream-card);color:var(--ink);border:1.5px solid var(--line);}
+  .btn-olive{background:var(--olive);color:#fff;box-shadow:0 3px 0 #47563A;}
+  .btn-danger{background:var(--danger);color:#fff;}
+  .btn-block{width:100%;}
+  .btn-sm{padding:7px 12px;font-size:12px;border-radius:10px;}
+
+  /* ===== MODAL / SHEET ===== */
+  .overlay{position:fixed;inset:0;background:rgba(58,46,38,0.5);display:none;align-items:flex-end;justify-content:center;z-index:100;}
+  .overlay.show{display:flex;}
+  .overlay.center{align-items:center;padding:16px;}
+  .sheet{background:var(--cream);width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:22px 18px 26px;max-height:88vh;overflow-y:auto;}
+  .overlay.center .sheet{border-radius:22px;max-height:88vh;}
+  .sheet-handle{width:36px;height:4px;background:var(--line);border-radius:3px;margin:0 auto 16px;}
+  .sheet-title{font-family:'Baloo 2';font-weight:700;font-size:18px;margin-bottom:14px;}
+  .field{margin-bottom:12px;}
+  .field label{font-size:12px;font-weight:700;color:var(--olive);display:block;margin-bottom:5px;}
+  .field input,.field select{width:100%;padding:11px 13px;border-radius:12px;border:1.5px solid var(--line);background:var(--cream-card);font-size:14px;color:var(--ink);outline:none;}
+  .field input:focus,.field select:focus{border-color:var(--maroon);}
+  .row2{display:flex;gap:10px;}
+  .row2>*{flex:1;}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 20px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.25);max-width:90vw;text-align:center;}
+
+  /* ===== ADMIN ===== */
+  .admin-tabs{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px;}
+  .admin-tab{padding:8px 14px;border-radius:12px;font-size:12.5px;font-weight:700;background:var(--cream-card);border:1.5px solid var(--line);color:var(--ink);cursor:pointer;white-space:nowrap;}
+  .admin-tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .list-item{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--cream-card);border:1.5px solid var(--line);border-radius:14px;padding:11px 13px;margin-bottom:8px;}
+  .list-item .name{font-weight:700;font-size:13.5px;}
+  .list-item .meta{font-size:11px;color:#8A7D6C;font-weight:600;margin-top:2px;}
+  .status-tag{font-size:10px;font-weight:800;padding:3px 8px;border-radius:8px;}
+  .status-upcoming{background:#E9EFE0;color:var(--olive);}
+  .status-active{background:#FBEAD0;color:var(--mustard);}
+  .status-completed{background:#EEE7DA;color:#8A7D6C;}
+  .status-left{background:#F5DEDE;color:var(--danger);}
+  .status-checkedin{background:#E4EEDA;color:var(--olive);}
+
+  .match-card{background:var(--cream-card);border:1.5px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px;}
+  .team-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;}
+  .team-names{font-weight:700;font-size:13.5px;}
+  .score-input{width:56px;padding:8px;text-align:center;border-radius:10px;border:1.5px solid var(--line);font-size:15px;font-weight:700;}
+  .vs-label{font-size:11px;color:#B3A594;font-weight:700;text-align:center;padding:2px 0;}
+
+  .fab{position:fixed;bottom:20px;right:16px;background:var(--maroon);color:#fff;width:56px;height:56px;border-radius:18px;border:none;font-size:24px;box-shadow:0 4px 0 var(--maroon-dark);cursor:pointer;z-index:50;max-width:480px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div style="padding:60px 0;text-align:center;color:#B3A594;font-weight:600;font-size:13px;">กำลังโหลด...</div>
+</div>
+
+<!-- ===== ADMIN LOGIN MODAL ===== -->
+<div class="overlay center" id="loginOverlay">
+  <div class="sheet" style="max-width:340px;">
+    <div class="sheet-title display">🔐 Admin Login</div>
+    <div class="field">
+      <label>Username</label>
+      <input id="loginUsername" placeholder="username" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="loginPassword" type="password" placeholder="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()">
+    </div>
+    <div class="row2" style="margin-top:16px;">
+      <button class="btn btn-outline btn-block" onclick="closeLogin()">ยกเลิก</button>
+      <button class="btn btn-primary btn-block" onclick="handleLogin()">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FILTER SHEET ===== -->
+<div class="overlay" id="filterOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title display">⚙️ ตัวกรอง</div>
+    <div class="field">
+      <label>เรียงตาม</label>
+      <select id="sortBy">
+        <option value="score">คะแนนรวม สูง → ต่ำ</option>
+        <option value="winrate">Win rate สูง → ต่ำ</option>
+        <option value="games">จำนวนเกม มาก → น้อย</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>เล่นอย่างน้อย (เกม)</label>
+      <select id="minGames">
+        <option value="0">ไม่กรอง</option>
+        <option value="3">≥ 3 เกม</option>
+        <option value="5" selected>≥ 5 เกม</option>
+        <option value="10">≥ 10 เกม</option>
+      </select>
+    </div>
+    <button class="btn btn-primary btn-block" style="margin-top:8px;" onclick="applyFilters()">ใช้ตัวกรอง</button>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc,
+  onSnapshot, query, orderBy, serverTimestamp, getDocs, getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAwWjtefvxUOT82M4iIRXsHaoW-HVTB_3g",
+  authDomain: "soisideout.firebaseapp.com",
+  projectId: "soisideout",
+  storageBucket: "soisideout.firebasestorage.app",
+  messagingSenderId: "1009122426162",
+  appId: "1:1009122426162:web:e25c88368eccc22be36b2b"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+/* ---------------- STATE ---------------- */
+let isAdmin = false;
+let players = [];          // all players from DB
+let sessions = [];         // all sessions from DB
+let currentSessionId = null; // session admin is currently managing
+let currentParticipants = []; // participants of currentSessionId
+let currentMatches = [];
+let pendingMatch = null;   // {team1:[id,id], team2:[id,id]}
+let filterGender = 'all';
+let filterSort = 'score';
+let filterMinGames = 5;
+let searchQuery = '';
+let adminTab = 'sessions'; // sessions | players | live
+
+/* ---------------- HELPERS ---------------- */
+function esc(s){
+  if (s===undefined||s===null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function usernameToEmail(u){ return `${u.toLowerCase().trim()}@soisideout.local`; }
+function toast(msg, color){
+  const t = document.createElement('div');
+  t.className = 'toast';
+  if (color) t.style.background = color;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2600);
+}
+function winrate(p){
+  const total = (p.totalWins||0)+(p.totalLosses||0);
+  if (!total) return 0;
+  return Math.round((p.totalWins/total)*100);
+}
+function genderLabel(g){ return g==='M' ? 'ชาย' : 'หญิง'; }
+function fmtDate(d){
+  try{
+    const dt = new Date(d+'T00:00:00');
+    const days=['อา','จ','อ','พ','พฤ','ศ','ส'];
+    const months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    return `${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]}`;
+  }catch(e){ return d; }
+}
+function playerById(id){ return players.find(p=>p.id===id); }
+
+/* ---------------- AUTH ---------------- */
+window.openLogin = function(){
+  document.getElementById('loginOverlay').classList.add('show');
+}
+window.closeLogin = function(){
+  document.getElementById('loginOverlay').classList.remove('show');
+}
+window.handleLogin = async function(){
+  const u = document.getElementById('loginUsername').value.trim();
+  const p = document.getElementById('loginPassword').value;
+  if (!u || !p){ toast('กรอก username และ password', '#B23B3B'); return; }
+  try{
+    await signInWithEmailAndPassword(auth, usernameToEmail(u), p);
+    closeLogin();
+    toast('เข้าสู่ระบบสำเร็จ', '#5B6E4E');
+  }catch(e){
+    console.error(e);
+    toast('username หรือ password ไม่ถูกต้อง', '#B23B3B');
+  }
+}
+window.handleLogout = async function(){
+  await signOut(auth);
+  adminTab = 'sessions';
+  currentSessionId = null;
+  toast('ออกจากระบบแล้ว');
+}
+onAuthStateChanged(auth, (user)=>{
+  isAdmin = !!user;
+  render();
+});
+
+/* ---------------- FIRESTORE LISTENERS ---------------- */
+onSnapshot(query(collection(db,'players'), orderBy('totalScore','desc')), (snap)=>{
+  players = snap.docs.map(d=>({id:d.id, ...d.data()}));
+  render();
+});
+onSnapshot(collection(db,'sessions'), (snap)=>{
+  sessions = snap.docs.map(d=>({id:d.id, ...d.data()}));
+  render();
+});
+
+function listenSessionDetail(sessionId){
+  if (!sessionId) return;
+  onSnapshot(collection(db, `sessions/${sessionId}/participants`), (snap)=>{
+    currentParticipants = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    render();
+  });
+  onSnapshot(query(collection(db, `sessions/${sessionId}/matches`), orderBy('roundNumber','desc')), (snap)=>{
+    currentMatches = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    render();
+  });
+}
+
+/* ---------------- GUEST: FILTER ---------------- */
+window.setGenderFilter = function(g){
+  filterGender = g;
+  render();
+}
+window.openFilterSheet = function(){
+  document.getElementById('sortBy').value = filterSort;
+  document.getElementById('minGames').value = filterMinGames;
+  document.getElementById('filterOverlay').classList.add('show');
+}
+window.applyFilters = function(){
+  filterSort = document.getElementById('sortBy').value;
+  filterMinGames = parseInt(document.getElementById('minGames').value);
+  document.getElementById('filterOverlay').classList.remove('show');
+  render();
+}
+window.onSearchInput = function(v){
+  searchQuery = v.toLowerCase();
+  render();
+}
+
+function getFilteredPlayers(){
+  let list = players.filter(p=>{
+    if (filterGender!=='all' && p.gender!==filterGender) return false;
+    if (searchQuery && !p.name.toLowerCase().includes(searchQuery)) return false;
+    if ((p.totalGamesPlayed||0) < filterMinGames) return false;
+    return true;
+  });
+  if (filterSort==='winrate') list.sort((a,b)=>winrate(b)-winrate(a));
+  else if (filterSort==='games') list.sort((a,b)=>(b.totalGamesPlayed||0)-(a.totalGamesPlayed||0));
+  else list.sort((a,b)=>(b.totalScore||0)-(a.totalScore||0));
+  return list;
+}
+
+/* ---------------- ADMIN: PLAYERS ---------------- */
+window.openAddPlayer = function(quickCallback){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="overlay show center" id="addPlayerOverlay">
+      <div class="sheet" style="max-width:340px;">
+        <div class="sheet-title display">+ เพิ่มผู้เล่นใหม่</div>
+        <div class="field">
+          <label>ชื่อ</label>
+          <input id="newPlayerName" placeholder="ชื่อผู้เล่น" autofocus>
+        </div>
+        <div class="field">
+          <label>เพศ</label>
+          <div class="row2">
+            <button class="btn btn-outline btn-block" id="genderM" onclick="selectGender('M')">ชาย</button>
+            <button class="btn btn-outline btn-block" id="genderF" onclick="selectGender('F')">หญิง</button>
+          </div>
+        </div>
+        <div class="row2" style="margin-top:14px;">
+          <button class="btn btn-outline btn-block" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn btn-primary btn-block" onclick="submitAddPlayer()">บันทึก</button>
+        </div>
+      </div>
+    </div>`;
+  window._newPlayerGender = null;
+  window._quickAddCallback = quickCallback || null;
+}
+window.selectGender = function(g){
+  window._newPlayerGender = g;
+  document.getElementById('genderM').style.background = g==='M' ? 'var(--maroon)' : '';
+  document.getElementById('genderM').style.color = g==='M' ? '#fff' : '';
+  document.getElementById('genderF').style.background = g==='F' ? 'var(--maroon)' : '';
+  document.getElementById('genderF').style.color = g==='F' ? '#fff' : '';
+}
+window.submitAddPlayer = async function(){
+  const name = document.getElementById('newPlayerName').value.trim();
+  const gender = window._newPlayerGender;
+  if (!name){ toast('กรอกชื่อผู้เล่น', '#B23B3B'); return; }
+  if (!gender){ toast('เลือกเพศ', '#B23B3B'); return; }
+  if (players.some(p=>p.name.toLowerCase()===name.toLowerCase())){
+    toast('ชื่อนี้มีอยู่แล้วในระบบ', '#B23B3B'); return;
+  }
+  const docRef = await addDoc(collection(db,'players'), {
+    name, gender, totalScore:1000, totalWins:0, totalLosses:0, totalGamesPlayed:0,
+    createdAt: serverTimestamp()
+  });
+  toast(`เพิ่ม ${name} แล้ว`, '#5B6E4E');
+  closeModal();
+  if (window._quickAddCallback) window._quickAddCallback(docRef.id);
+}
+window.closeModal = function(){
+  document.getElementById('modalRoot').innerHTML = '';
+}
+
+/* ---------------- ADMIN: SESSIONS ---------------- */
+window.openCreateSession = function(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="overlay show center">
+      <div class="sheet" style="max-width:360px;">
+        <div class="sheet-title display">📅 สร้าง Session ใหม่</div>
+        <div class="field"><label>วันที่</label><input id="sDate" type="date"></div>
+        <div class="field"><label>สถานที่</label><input id="sLocation" placeholder="เช่น Sterling"></div>
+        <div class="row2">
+          <div class="field"><label>เวลาเริ่ม</label><input id="sStart" type="time" value="15:00"></div>
+          <div class="field"><label>เวลาจบ</label><input id="sEnd" type="time" value="18:00"></div>
+        </div>
+        <div class="row2" style="margin-top:14px;">
+          <button class="btn btn-outline btn-block" onclick="closeModal()">ยกเลิก</button>
+          <button class="btn btn-primary btn-block" onclick="submitCreateSession()">สร้าง</button>
+        </div>
+      </div>
+    </div>`;
+}
+window.submitCreateSession = async function(){
+  const date = document.getElementById('sDate').value;
+  const location = document.getElementById('sLocation').value.trim();
+  const startTime = document.getElementById('sStart').value;
+  const endTime = document.getElementById('sEnd').value;
+  if (!date||!location||!startTime||!endTime){ toast('กรอกข้อมูลให้ครบ', '#B23B3B'); return; }
+  await addDoc(collection(db,'sessions'), {
+    date, location, startTime, endTime, status:'upcoming', createdAt: serverTimestamp()
+  });
+  toast('สร้าง session แล้ว', '#5B6E4E');
+  closeModal();
+}
+window.openSessionDetail = function(sessionId){
+  currentSessionId = sessionId;
+  adminTab = 'live';
+  listenSessionDetail(sessionId);
+  render();
+}
+window.startSession = async function(sessionId){
+  await updateDoc(doc(db,'sessions',sessionId), { status:'active' });
+  toast('เริ่ม session แล้ว 🔴', '#5B6E4E');
+}
+window.completeSession = async function(sessionId){
+  if (!confirm('จบ session นี้ใช่ไหม?')) return;
+  await updateDoc(doc(db,'sessions',sessionId), { status:'completed' });
+  toast('จบ session แล้ว');
+  currentSessionId = null;
+  adminTab = 'sessions';
+}
+window.deleteSessionConfirm = async function(sessionId){
+  if (!confirm('ลบ session นี้ถาวร? (ใช้เมื่อสร้างผิด)')) return;
+  await deleteDoc(doc(db,'sessions',sessionId));
+  toast('ลบแล้ว');
+}
+
+/* ---------------- ADMIN: CHECK-IN ---------------- */
+window._checkinSearch = '';
+window.onCheckinSearch = function(v){
+  window._checkinSearch = v.toLowerCase();
+  render();
+}
+window.checkInPlayer = async function(playerId){
+  if (!currentSessionId) return;
+  const p = playerById(playerId);
+  await setDoc(doc(db, `sessions/${currentSessionId}/participants`, playerId), {
+    name: p.name, gender: p.gender, status:'active',
+    gamesPlayedToday:0, lastPartnerId:null, waitingSince: serverTimestamp(),
+    joinedAt: serverTimestamp(), leftAt:null
+  });
+  toast(`${p.name} check-in แล้ว`, '#5B6E4E');
+  window._checkinSearch='';
+}
+window.quickAddAndCheckin = function(){
+  const name = document.getElementById('checkinSearchInput')?.value.trim();
+  openAddPlayer(async (newId)=>{
+    await checkInPlayer(newId);
+  });
+  setTimeout(()=>{ const el=document.getElementById('newPlayerName'); if(el && name) el.value = name; },50);
+}
+window.markLeftEarly = async function(participantId){
+  if (!confirm('ยืนยันว่าออกก่อนจบ (Left Early)?')) return;
+  await updateDoc(doc(db, `sessions/${currentSessionId}/participants`, participantId), {
+    status:'left_early', leftAt: serverTimestamp()
+  });
+  toast('บันทึกแล้ว');
+}
+window.reactivatePlayer = async function(participantId){
+  await updateDoc(doc(db, `sessions/${currentSessionId}/participants`, participantId), {
+    status:'active', leftAt:null
+  });
+  toast('กลับมา active แล้ว');
+}
+
+/* ---------------- ADMIN: MATCH GENERATION ---------------- */
+window.generateMatch = function(){
+  const active = currentParticipants.filter(p=>p.status==='active');
+  if (active.length < 4){ toast('ต้องมีผู้เล่น active อย่างน้อย 4 คน', '#B23B3B'); return; }
+
+  // sort by gamesPlayedToday asc, then waitingSince asc (earlier = longer wait)
+  const sorted = [...active].sort((a,b)=>{
+    const gp = (a.gamesPlayedToday||0)-(b.gamesPlayedToday||0);
+    if (gp!==0) return gp;
+    const at = a.waitingSince?.toMillis ? a.waitingSince.toMillis() : 0;
+    const bt = b.waitingSince?.toMillis ? b.waitingSince.toMillis() : 0;
+    return at-bt;
+  });
+  const four = sorted.slice(0,4);
+  const ids = four.map(p=>p.id);
+
+  // try pairing avoiding last partner
+  let bestPairing = null;
+  const pairings = [
+    [[ids[0],ids[1]],[ids[2],ids[3]]],
+    [[ids[0],ids[2]],[ids[1],ids[3]]],
+    [[ids[0],ids[3]],[ids[1],ids[2]]]
+  ];
+  const shuffled = pairings.sort(()=>Math.random()-0.5);
+  for (const pairing of shuffled){
+    const [t1,t2] = pairing;
+    const t1ok = !(four.find(p=>p.id===t1[0]).lastPartnerId === t1[1]);
+    const t2ok = !(four.find(p=>p.id===t2[0]).lastPartnerId === t2[1]);
+    if (t1ok && t2ok){ bestPairing = pairing; break; }
+  }
+  if (!bestPairing) bestPairing = shuffled[0];
+
+  pendingMatch = { team1: bestPairing[0], team2: bestPairing[1] };
+  render();
+}
+window.cancelPendingMatch = function(){
+  pendingMatch = null;
+  render();
+}
+window.reshuffleMatch = function(){
+  generateMatch();
+}
+window.confirmAndRecordMatch = async function(){
+  const s1 = parseInt(document.getElementById('scoreT1').value);
+  const s2 = parseInt(document.getElementById('scoreT2').value);
+  if (isNaN(s1)||isNaN(s2)){ toast('กรอกคะแนนให้ครบ', '#B23B3B'); return; }
+  if (s1===s2){ toast('คะแนนห้ามเท่ากัน (ไม่มีเสมอ)', '#B23B3B'); return; }
+
+  const [t1a,t1b] = pendingMatch.team1;
+  const [t2a,t2b] = pendingMatch.team2;
+  const winnerTeam = s1>s2 ? 1 : 2;
+  const diff = Math.abs(s1-s2);
+  const winIds = winnerTeam===1 ? [t1a,t1b] : [t2a,t2b];
+  const loseIds = winnerTeam===1 ? [t2a,t2b] : [t1a,t1b];
+
+  const roundNumber = (currentMatches[0]?.roundNumber || 0) + 1;
+
+  await addDoc(collection(db, `sessions/${currentSessionId}/matches`), {
+    roundNumber,
+    team1:{p1:t1a,p2:t1b}, team2:{p1:t2a,p2:t2b},
+    score1:s1, score2:s2, winnerTeam, scoreDiff:diff,
+    playedAt: serverTimestamp()
+  });
+
+  // update players collection
+  for (const id of winIds){
+    const p = playerById(id);
+    await updateDoc(doc(db,'players',id), {
+      totalScore:(p.totalScore||1000)+diff,
+      totalWins:(p.totalWins||0)+1,
+      totalGamesPlayed:(p.totalGamesPlayed||0)+1
+    });
+  }
+  for (const id of loseIds){
+    const p = playerById(id);
+    await updateDoc(doc(db,'players',id), {
+      totalScore:(p.totalScore||1000)-diff,
+      totalLosses:(p.totalLosses||0)+1,
+      totalGamesPlayed:(p.totalGamesPlayed||0)+1
+    });
+  }
+  // update participants: gamesPlayedToday, lastPartnerId, waitingSince
+  const updates = [
+    [t1a,t1b],[t1b,t1a],[t2a,t2b],[t2b,t2a]
+  ];
+  for (const [id, partnerId] of updates){
+    const part = currentParticipants.find(p=>p.id===id);
+    await updateDoc(doc(db, `sessions/${currentSessionId}/participants`, id), {
+      gamesPlayedToday:(part?.gamesPlayedToday||0)+1,
+      lastPartnerId: partnerId,
+      waitingSince: serverTimestamp()
+    });
+  }
+
+  toast('บันทึกผลแล้ว', '#5B6E4E');
+  pendingMatch = null;
+}
+
+/* ---------------- RENDER ---------------- */
+function render(){
+  const root = document.getElementById('app');
+  root.innerHTML = isAdmin ? renderAdmin() : renderGuest();
+}
+
+function renderHeader(){
+  return `
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark">🏓</div>
+        <div class="brand-text">
+          <div class="name display">Soi Sideout</div>
+          <div class="sub">Saturday League</div>
+        </div>
+      </div>
+      ${isAdmin
+        ? `<button class="admin-btn logged" onclick="handleLogout()">ออกจากระบบ</button>`
+        : `<button class="admin-btn" onclick="openLogin()">Admin</button>`}
+    </div>`;
+}
+
+function renderBanner(){
+  const active = sessions.find(s=>s.status==='active');
+  const upcoming = sessions.filter(s=>s.status==='upcoming').sort((a,b)=>a.date.localeCompare(b.date))[0];
+  const s = active || upcoming;
+  if (!s) return '';
+  return `
+    <div class="banner ${active?'live':''}">
+      <div class="banner-eyebrow"><span class="dot ${active?'pulse':''}"></span>${active?'กำลังเล่นอยู่ตอนนี้':'ครั้งต่อไป'}</div>
+      <div class="banner-title display">${esc(fmtDate(s.date))}</div>
+      <div class="banner-meta">
+        <span>📍 ${esc(s.location)}</span>
+        <span>🕒 ${esc(s.startTime)} – ${esc(s.endTime)}</span>
+      </div>
+    </div>`;
+}
+
+/* ---- GUEST VIEW ---- */
+function renderGuest(){
+  const list = getFilteredPlayers();
+  const activeCount = filterMinGames>0;
+  return `
+    ${renderHeader()}
+    ${renderBanner()}
+    <div class="search-box">
+      <span>🔍</span>
+      <input type="text" placeholder="ค้นหาชื่อผู้เล่น..." value="${esc(searchQuery)}" oninput="onSearchInput(this.value)">
+    </div>
+    <div class="filter-row">
+      <div class="pill-group">
+        <button class="pill ${filterGender==='all'?'active':''}" onclick="setGenderFilter('all')">ทั้งหมด</button>
+        <button class="pill ${filterGender==='M'?'active':''}" onclick="setGenderFilter('M')">ชาย</button>
+        <button class="pill ${filterGender==='F'?'active':''}" onclick="setGenderFilter('F')">หญิง</button>
+      </div>
+      <button class="filter-btn" onclick="openFilterSheet()">⚙️ กรอง ${activeCount?`<span class="filter-badge">1</span>`:''}</button>
+    </div>
+    <div class="section-label"><span>อันดับผู้เล่น · ${list.length} คน</span></div>
+    <div class="board">
+      ${list.length ? list.map((p,i)=>renderPlayerCard(p,i)).join('') : `<div class="empty-note">ไม่พบผู้เล่นตามเงื่อนไขนี้</div>`}
+    </div>
+    <div class="footer-note">Soi Sideout · เล่นด้วยกัน ทุกเสาร์</div>`;
+}
+
+function renderPlayerCard(p, i){
+  const rank = i+1;
+  const cls = rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
+  const badge = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank;
+  return `
+    <div class="card ${cls}">
+      <div class="rank-badge">${badge}</div>
+      <div class="card-info">
+        <div class="card-name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
+        <div class="card-sub">เล่น ${p.totalGamesPlayed||0} เกม</div>
+      </div>
+      <div class="card-stats">
+        <div class="stat-score">${p.totalScore||1000}</div>
+        <div class="stat-winrate">Win ${winrate(p)}%</div>
+      </div>
+    </div>`;
+}
+
+/* ---- ADMIN VIEW ---- */
+function renderAdmin(){
+  return `
+    ${renderHeader()}
+    <div class="admin-tabs">
+      <button class="admin-tab ${adminTab==='sessions'?'active':''}" onclick="setAdminTab('sessions')">📅 Sessions</button>
+      <button class="admin-tab ${adminTab==='players'?'active':''}" onclick="setAdminTab('players')">👥 ผู้เล่น</button>
+      ${currentSessionId?`<button class="admin-tab ${adminTab==='live'?'active':''}" onclick="setAdminTab('live')">🔴 กำลังจัดการ</button>`:''}
+    </div>
+    ${adminTab==='sessions' ? renderAdminSessions() : ''}
+    ${adminTab==='players' ? renderAdminPlayers() : ''}
+    ${adminTab==='live' ? renderAdminLive() : ''}
+  `;
+}
+window.setAdminTab = function(t){ adminTab = t; render(); }
+
+function renderAdminSessions(){
+  const sorted = [...sessions].sort((a,b)=>b.date.localeCompare(a.date));
+  return `
+    <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="openCreateSession()">+ สร้าง Session ใหม่</button>
+    <div class="section-label">Sessions ทั้งหมด</div>
+    ${sorted.length? sorted.map(s=>`
+      <div class="list-item" style="align-items:flex-start;">
+        <div style="flex:1;cursor:pointer;" onclick="openSessionDetail('${s.id}')">
+          <div class="name">${esc(fmtDate(s.date))} <span class="status-tag status-${s.status}">${s.status}</span></div>
+          <div class="meta">📍 ${esc(s.location)} · 🕒 ${esc(s.startTime)}-${esc(s.endTime)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${s.status==='upcoming'?`<button class="btn btn-olive btn-sm" onclick="startSession('${s.id}')">เริ่ม</button>`:''}
+          ${s.status==='active'?`<button class="btn btn-outline btn-sm" onclick="openSessionDetail('${s.id}')">จัดการ</button>`:''}
+          ${s.status==='upcoming'?`<button class="btn btn-danger btn-sm" onclick="deleteSessionConfirm('${s.id}')">ลบ</button>`:''}
+        </div>
+      </div>`).join('') : `<div class="empty-note">ยังไม่มี session</div>`}
+  `;
+}
+
+function renderAdminPlayers(){
+  const sorted = [...players].sort((a,b)=>(b.totalScore||0)-(a.totalScore||0));
+  return `
+    <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="openAddPlayer()">+ เพิ่มผู้เล่นใหม่</button>
+    <div class="section-label">ผู้เล่นทั้งหมด · ${players.length} คน</div>
+    ${sorted.map(p=>`
+      <div class="list-item">
+        <div>
+          <div class="name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
+          <div class="meta">${p.totalScore||1000} คะแนน · Win ${winrate(p)}% · ${p.totalGamesPlayed||0} เกม</div>
+        </div>
+      </div>`).join('')}
+  `;
+}
+
+function renderAdminLive(){
+  const session = sessions.find(s=>s.id===currentSessionId);
+  if (!session) return `<div class="empty-note">ไม่พบ session</div>`;
+  const active = currentParticipants.filter(p=>p.status==='active');
+  const leftEarly = currentParticipants.filter(p=>p.status==='left_early');
+  const checkedInIds = currentParticipants.map(p=>p.id);
+  const searchResults = window._checkinSearch
+    ? players.filter(p=>p.name.toLowerCase().includes(window._checkinSearch) && !checkedInIds.includes(p.id)).slice(0,6)
+    : [];
+
+  return `
+    <div class="banner ${session.status==='active'?'live':''}" style="margin-bottom:14px;">
+      <div class="banner-eyebrow"><span class="dot ${session.status==='active'?'pulse':''}"></span>${session.status}</div>
+      <div class="banner-title display">${esc(fmtDate(session.date))}</div>
+      <div class="banner-meta"><span>📍 ${esc(session.location)}</span><span>🕒 ${esc(session.startTime)}-${esc(session.endTime)}</span></div>
+    </div>
+
+    ${pendingMatch ? renderPendingMatch() : `
+      <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="generateMatch()">🎲 สุ่มจับคู่ Match ถัดไป</button>`}
+
+    <div class="section-label">Check-in ผู้เล่น</div>
+    <div class="search-box">
+      <span>🔍</span>
+      <input id="checkinSearchInput" type="text" placeholder="ค้นหาชื่อเพื่อ check-in..." oninput="onCheckinSearch(this.value)">
+    </div>
+    ${window._checkinSearch ? `
+      <div style="margin-bottom:14px;">
+        ${searchResults.map(p=>`
+          <div class="list-item">
+            <div class="name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
+            <button class="btn btn-olive btn-sm" onclick="checkInPlayer('${p.id}')">Check-in</button>
+          </div>`).join('')}
+        ${searchResults.length===0 ? `
+          <div class="list-item">
+            <div class="meta">ไม่พบชื่อนี้ในระบบ</div>
+            <button class="btn btn-primary btn-sm" onclick="quickAddAndCheckin()">+ เพิ่มผู้เล่นใหม่</button>
+          </div>`:''}
+      </div>` : ''}
+
+    <div class="section-label">Active วันนี้ · ${active.length} คน</div>
+    ${active.length? active.map(p=>`
+      <div class="list-item">
+        <div>
+          <div class="name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
+          <div class="meta">เล่นแล้ว ${p.gamesPlayedToday||0} เกมวันนี้</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="markLeftEarly('${p.id}')">Left Early</button>
+      </div>`).join('') : `<div class="empty-note">ยังไม่มีผู้เล่น check-in</div>`}
+
+    ${leftEarly.length? `
+      <div class="section-label" style="margin-top:16px;">ออกก่อนจบ · ${leftEarly.length} คน</div>
+      ${leftEarly.map(p=>`
+        <div class="list-item">
+          <div class="name">${esc(p.name)} <span class="status-tag status-left">left early</span></div>
+          <button class="btn btn-outline btn-sm" onclick="reactivatePlayer('${p.id}')">กลับมา Active</button>
+        </div>`).join('')}
+    ` : ''}
+
+    <div class="section-label" style="margin-top:16px;">ผลการแข่งขันวันนี้</div>
+    ${currentMatches.length? currentMatches.map(m=>renderMatchHistory(m)).join('') : `<div class="empty-note">ยังไม่มีการแข่งขัน</div>`}
+
+    <div class="row2" style="margin-top:20px;">
+      <button class="btn btn-outline btn-block" onclick="setAdminTab('sessions')">กลับหน้า Sessions</button>
+      ${session.status==='active'?`<button class="btn btn-danger btn-block" onclick="completeSession('${session.id}')">จบ Session</button>`:''}
+    </div>
+  `;
+}
+
+function renderPendingMatch(){
+  const [t1a,t1b] = pendingMatch.team1;
+  const [t2a,t2b] = pendingMatch.team2;
+  const p1a=playerById(t1a), p1b=playerById(t1b), p2a=playerById(t2a), p2b=playerById(t2b);
+  return `
+    <div class="match-card" style="margin-bottom:16px;">
+      <div class="section-label" style="margin:0 0 10px;">Match ใหม่ — กรอกคะแนนแล้วบันทึก</div>
+      <div class="team-row">
+        <div class="team-names">${esc(p1a?.name)} + ${esc(p1b?.name)}</div>
+        <input class="score-input" id="scoreT1" type="number" placeholder="0">
+      </div>
+      <div class="vs-label">VS</div>
+      <div class="team-row">
+        <div class="team-names">${esc(p2a?.name)} + ${esc(p2b?.name)}</div>
+        <input class="score-input" id="scoreT2" type="number" placeholder="0">
+      </div>
+      <div class="row2" style="margin-top:12px;">
+        <button class="btn btn-outline btn-block" onclick="reshuffleMatch()">🔄 สุ่มใหม่</button>
+        <button class="btn btn-outline btn-block" onclick="cancelPendingMatch()">ยกเลิก</button>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:8px;" onclick="confirmAndRecordMatch()">✅ ยืนยันบันทึกผล</button>
+    </div>`;
+}
+
+function renderMatchHistory(m){
+  const p1a=playerById(m.team1.p1), p1b=playerById(m.team1.p2);
+  const p2a=playerById(m.team2.p1), p2b=playerById(m.team2.p2);
+  const w1 = m.winnerTeam===1;
+  return `
+    <div class="match-card">
+      <div style="font-size:11px;color:#B3A594;font-weight:700;margin-bottom:6px;">Round ${m.roundNumber}</div>
+      <div class="team-row">
+        <div class="team-names" style="color:${w1?'var(--olive)':'var(--ink)'}">${w1?'🏆 ':''}${esc(p1a?.name)} + ${esc(p1b?.name)}</div>
+        <div class="team-names">${m.score1}</div>
+      </div>
+      <div class="team-row">
+        <div class="team-names" style="color:${!w1?'var(--olive)':'var(--ink)'}">${!w1?'🏆 ':''}${esc(p2a?.name)} + ${esc(p2b?.name)}</div>
+        <div class="team-names">${m.score2}</div>
+      </div>
+    </div>`;
+}
+
+render();
+</script>
+</body>
+</html>
