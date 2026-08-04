@@ -160,18 +160,18 @@
 <!-- ===== ADMIN LOGIN MODAL ===== -->
 <div class="overlay center" id="loginOverlay">
   <div class="sheet" style="max-width:340px;">
-    <div class="sheet-title display">🔐 Admin Login</div>
+    <div class="sheet-title display" id="loginTitle">🔐 Admin Login</div>
     <div class="field">
-      <label>Username</label>
+      <label id="loginUserLabel">Username</label>
       <input id="loginUsername" placeholder="username" autocomplete="username">
     </div>
     <div class="field">
-      <label>Password</label>
+      <label id="loginPassLabel">Password</label>
       <input id="loginPassword" type="password" placeholder="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()">
     </div>
     <div class="row2" style="margin-top:16px;">
-      <button class="btn btn-outline btn-block" onclick="closeLogin()">ยกเลิก</button>
-      <button class="btn btn-primary btn-block" onclick="handleLogin()">เข้าสู่ระบบ</button>
+      <button class="btn btn-outline btn-block" id="loginCancelBtn" onclick="closeLogin()">ยกเลิก</button>
+      <button class="btn btn-primary btn-block" id="loginSubmitBtn" onclick="handleLogin()">เข้าสู่ระบบ</button>
     </div>
   </div>
 </div>
@@ -180,25 +180,25 @@
 <div class="overlay" id="filterOverlay">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-title display">⚙️ ตัวกรอง</div>
+    <div class="sheet-title display" id="filterTitle">⚙️ ตัวกรอง</div>
     <div class="field">
-      <label>เรียงตาม</label>
+      <label id="sortByLabel">เรียงตาม</label>
       <select id="sortBy">
-        <option value="score">คะแนนรวม สูง → ต่ำ</option>
-        <option value="winrate">Win rate สูง → ต่ำ</option>
-        <option value="games">จำนวนเกม มาก → น้อย</option>
+        <option value="score" id="sortOpt1">คะแนนรวม สูง → ต่ำ</option>
+        <option value="winrate" id="sortOpt2">Win rate สูง → ต่ำ</option>
+        <option value="games" id="sortOpt3">จำนวนเกม มาก → น้อย</option>
       </select>
     </div>
     <div class="field">
-      <label>เล่นอย่างน้อย (เกม)</label>
+      <label id="minGamesLabel">เล่นอย่างน้อย (เกม)</label>
       <select id="minGames">
-        <option value="0">ไม่กรอง</option>
+        <option value="0" id="minOpt0">ไม่กรอง</option>
         <option value="3">≥ 3 เกม</option>
         <option value="5" selected>≥ 5 เกม</option>
         <option value="10">≥ 10 เกม</option>
       </select>
     </div>
-    <button class="btn btn-primary btn-block" style="margin-top:8px;" onclick="applyFilters()">ใช้ตัวกรอง</button>
+    <button class="btn btn-primary btn-block" style="margin-top:8px;" id="applyFilterBtn" onclick="applyFilters()">ใช้ตัวกรอง</button>
   </div>
 </div>
 
@@ -238,7 +238,33 @@ let filterGender = 'all';
 let filterSort = 'score';
 let filterMinGames = 5;
 let searchQuery = '';
-let adminTab = 'sessions'; // sessions | players | live
+let adminTab = 'home'; // home | sessions | players | live
+let lang = localStorage.getItem('ss_lang') || 'th';
+
+/* ---------------- I18N ---------------- */
+function t(th, en){ return lang==='th' ? th : en; }
+window.toggleLang = function(){
+  lang = lang==='th' ? 'en' : 'th';
+  localStorage.setItem('ss_lang', lang);
+  applyStaticTranslations();
+  render();
+}
+function applyStaticTranslations(){
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  set('loginTitle', t('🔐 เข้าสู่ระบบ Admin','🔐 Admin Login'));
+  set('loginUserLabel', t('ชื่อผู้ใช้','Username'));
+  set('loginPassLabel', t('รหัสผ่าน','Password'));
+  set('loginCancelBtn', t('ยกเลิก','Cancel'));
+  set('loginSubmitBtn', t('เข้าสู่ระบบ','Login'));
+  set('filterTitle', t('⚙️ ตัวกรอง','⚙️ Filters'));
+  set('sortByLabel', t('เรียงตาม','Sort by'));
+  set('sortOpt1', t('คะแนนรวม สูง → ต่ำ','Total score high → low'));
+  set('sortOpt2', t('Win rate สูง → ต่ำ','Win rate high → low'));
+  set('sortOpt3', t('จำนวนเกม มาก → น้อย','Games played high → low'));
+  set('minGamesLabel', t('เล่นอย่างน้อย (เกม)','Minimum games played'));
+  set('minOpt0', t('ไม่กรอง','No filter'));
+  set('applyFilterBtn', t('ใช้ตัวกรอง','Apply filters'));
+}
 
 /* ---------------- HELPERS ---------------- */
 function esc(s){
@@ -259,10 +285,13 @@ function winrate(p){
   if (!total) return 0;
   return Math.round((p.totalWins/total)*100);
 }
-function genderLabel(g){ return g==='M' ? 'ชาย' : 'หญิง'; }
+function genderLabel(g){ return g==='M' ? t('ชาย','Male') : t('หญิง','Female'); }
 function fmtDate(d){
   try{
     const dt = new Date(d+'T00:00:00');
+    if (lang==='en'){
+      return dt.toLocaleDateString('en-US', { weekday:'short', day:'numeric', month:'short' });
+    }
     const days=['อา','จ','อ','พ','พฤ','ศ','ส'];
     const months=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
     return `${days[dt.getDay()]} ${dt.getDate()} ${months[dt.getMonth()]}`;
@@ -280,21 +309,21 @@ window.closeLogin = function(){
 window.handleLogin = async function(){
   const u = document.getElementById('loginUsername').value.trim();
   const p = document.getElementById('loginPassword').value;
-  if (!u || !p){ toast('กรอก username และ password', '#B23B3B'); return; }
+  if (!u || !p){ toast(t('กรอก username และ password','Enter username and password'), '#B23B3B'); return; }
   try{
     await signInWithEmailAndPassword(auth, usernameToEmail(u), p);
     closeLogin();
-    toast('เข้าสู่ระบบสำเร็จ', '#5B6E4E');
+    toast(t('เข้าสู่ระบบสำเร็จ','Logged in successfully'), '#5B6E4E');
   }catch(e){
     console.error(e);
-    toast('username หรือ password ไม่ถูกต้อง', '#B23B3B');
+    toast(t('username หรือ password ไม่ถูกต้อง','Incorrect username or password'), '#B23B3B');
   }
 }
 window.handleLogout = async function(){
   await signOut(auth);
-  adminTab = 'sessions';
+  adminTab = 'home';
   currentSessionId = null;
-  toast('ออกจากระบบแล้ว');
+  toast(t('ออกจากระบบแล้ว','Logged out'));
 }
 onAuthStateChanged(auth, (user)=>{
   isAdmin = !!user;
@@ -363,21 +392,21 @@ window.openAddPlayer = function(quickCallback){
   root.innerHTML = `
     <div class="overlay show center" id="addPlayerOverlay">
       <div class="sheet" style="max-width:340px;">
-        <div class="sheet-title display">+ เพิ่มผู้เล่นใหม่</div>
+        <div class="sheet-title display">+ ${t('เพิ่มผู้เล่นใหม่','Add new player')}</div>
         <div class="field">
-          <label>ชื่อ</label>
-          <input id="newPlayerName" placeholder="ชื่อผู้เล่น" autofocus>
+          <label>${t('ชื่อ','Name')}</label>
+          <input id="newPlayerName" placeholder="${t('ชื่อผู้เล่น','Player name')}" autofocus>
         </div>
         <div class="field">
-          <label>เพศ</label>
+          <label>${t('เพศ','Gender')}</label>
           <div class="row2">
-            <button class="btn btn-outline btn-block" id="genderM" onclick="selectGender('M')">ชาย</button>
-            <button class="btn btn-outline btn-block" id="genderF" onclick="selectGender('F')">หญิง</button>
+            <button class="btn btn-outline btn-block" id="genderM" onclick="selectGender('M')">${t('ชาย','Male')}</button>
+            <button class="btn btn-outline btn-block" id="genderF" onclick="selectGender('F')">${t('หญิง','Female')}</button>
           </div>
         </div>
         <div class="row2" style="margin-top:14px;">
-          <button class="btn btn-outline btn-block" onclick="closeModal()">ยกเลิก</button>
-          <button class="btn btn-primary btn-block" onclick="submitAddPlayer()">บันทึก</button>
+          <button class="btn btn-outline btn-block" onclick="closeModal()">${t('ยกเลิก','Cancel')}</button>
+          <button class="btn btn-primary btn-block" onclick="submitAddPlayer()">${t('บันทึก','Save')}</button>
         </div>
       </div>
     </div>`;
@@ -394,16 +423,16 @@ window.selectGender = function(g){
 window.submitAddPlayer = async function(){
   const name = document.getElementById('newPlayerName').value.trim();
   const gender = window._newPlayerGender;
-  if (!name){ toast('กรอกชื่อผู้เล่น', '#B23B3B'); return; }
-  if (!gender){ toast('เลือกเพศ', '#B23B3B'); return; }
+  if (!name){ toast(t('กรอกชื่อผู้เล่น','Enter player name'), '#B23B3B'); return; }
+  if (!gender){ toast(t('เลือกเพศ','Select gender'), '#B23B3B'); return; }
   if (players.some(p=>p.name.toLowerCase()===name.toLowerCase())){
-    toast('ชื่อนี้มีอยู่แล้วในระบบ', '#B23B3B'); return;
+    toast(t('ชื่อนี้มีอยู่แล้วในระบบ','This name already exists'), '#B23B3B'); return;
   }
   const docRef = await addDoc(collection(db,'players'), {
     name, gender, totalScore:1000, totalWins:0, totalLosses:0, totalGamesPlayed:0,
     createdAt: serverTimestamp()
   });
-  toast(`เพิ่ม ${name} แล้ว`, '#5B6E4E');
+  toast(`${t('เพิ่ม','Added')} ${name} ${t('แล้ว','')}`, '#5B6E4E');
   closeModal();
   if (window._quickAddCallback) window._quickAddCallback(docRef.id);
 }
@@ -417,16 +446,16 @@ window.openCreateSession = function(){
   root.innerHTML = `
     <div class="overlay show center">
       <div class="sheet" style="max-width:360px;">
-        <div class="sheet-title display">📅 สร้าง Session ใหม่</div>
-        <div class="field"><label>วันที่</label><input id="sDate" type="date"></div>
-        <div class="field"><label>สถานที่</label><input id="sLocation" placeholder="เช่น Sterling"></div>
+        <div class="sheet-title display">📅 ${t('สร้าง Session ใหม่','Create new session')}</div>
+        <div class="field"><label>${t('วันที่','Date')}</label><input id="sDate" type="date"></div>
+        <div class="field"><label>${t('สถานที่','Location')}</label><input id="sLocation" placeholder="${t('เช่น Sterling','e.g. Sterling')}"></div>
         <div class="row2">
-          <div class="field"><label>เวลาเริ่ม</label><input id="sStart" type="time" value="15:00"></div>
-          <div class="field"><label>เวลาจบ</label><input id="sEnd" type="time" value="18:00"></div>
+          <div class="field"><label>${t('เวลาเริ่ม','Start time')}</label><input id="sStart" type="time" value="15:00"></div>
+          <div class="field"><label>${t('เวลาจบ','End time')}</label><input id="sEnd" type="time" value="18:00"></div>
         </div>
         <div class="row2" style="margin-top:14px;">
-          <button class="btn btn-outline btn-block" onclick="closeModal()">ยกเลิก</button>
-          <button class="btn btn-primary btn-block" onclick="submitCreateSession()">สร้าง</button>
+          <button class="btn btn-outline btn-block" onclick="closeModal()">${t('ยกเลิก','Cancel')}</button>
+          <button class="btn btn-primary btn-block" onclick="submitCreateSession()">${t('สร้าง','Create')}</button>
         </div>
       </div>
     </div>`;
@@ -436,11 +465,11 @@ window.submitCreateSession = async function(){
   const location = document.getElementById('sLocation').value.trim();
   const startTime = document.getElementById('sStart').value;
   const endTime = document.getElementById('sEnd').value;
-  if (!date||!location||!startTime||!endTime){ toast('กรอกข้อมูลให้ครบ', '#B23B3B'); return; }
+  if (!date||!location||!startTime||!endTime){ toast(t('กรอกข้อมูลให้ครบ','Fill in all fields'), '#B23B3B'); return; }
   await addDoc(collection(db,'sessions'), {
     date, location, startTime, endTime, status:'upcoming', createdAt: serverTimestamp()
   });
-  toast('สร้าง session แล้ว', '#5B6E4E');
+  toast(t('สร้าง session แล้ว','Session created'), '#5B6E4E');
   closeModal();
 }
 window.openSessionDetail = function(sessionId){
@@ -451,26 +480,27 @@ window.openSessionDetail = function(sessionId){
 }
 window.startSession = async function(sessionId){
   await updateDoc(doc(db,'sessions',sessionId), { status:'active' });
-  toast('เริ่ม session แล้ว 🔴', '#5B6E4E');
+  toast(t('เริ่ม session แล้ว 🔴','Session started 🔴'), '#5B6E4E');
 }
 window.completeSession = async function(sessionId){
-  if (!confirm('จบ session นี้ใช่ไหม?')) return;
+  if (!confirm(t('จบ session นี้ใช่ไหม?','End this session?'))) return;
   await updateDoc(doc(db,'sessions',sessionId), { status:'completed' });
-  toast('จบ session แล้ว');
+  toast(t('จบ session แล้ว','Session ended'));
   currentSessionId = null;
   adminTab = 'sessions';
 }
 window.deleteSessionConfirm = async function(sessionId){
-  if (!confirm('ลบ session นี้ถาวร? (ใช้เมื่อสร้างผิด)')) return;
+  if (!confirm(t('ลบ session นี้ถาวร? (ใช้เมื่อสร้างผิด)','Permanently delete this session? (use if created by mistake)'))) return;
   await deleteDoc(doc(db,'sessions',sessionId));
-  toast('ลบแล้ว');
+  toast(t('ลบแล้ว','Deleted'));
 }
 
 /* ---------------- ADMIN: CHECK-IN ---------------- */
-window._checkinSearch = '';
-window.onCheckinSearch = function(v){
-  window._checkinSearch = v.toLowerCase();
-  render();
+window.checkInFromDropdown = function(){
+  const sel = document.getElementById('checkinSelect');
+  const playerId = sel ? sel.value : '';
+  if (!playerId){ toast(t('เลือกผู้เล่นก่อน','Select a player first'), '#B23B3B'); return; }
+  checkInPlayer(playerId);
 }
 window.checkInPlayer = async function(playerId){
   if (!currentSessionId) return;
@@ -480,7 +510,7 @@ window.checkInPlayer = async function(playerId){
     gamesPlayedToday:0, lastPartnerId:null, waitingSince: serverTimestamp(),
     joinedAt: serverTimestamp(), leftAt:null
   });
-  toast(`${p.name} check-in แล้ว`, '#5B6E4E');
+  toast(`${p.name} ${t('check-in แล้ว','checked in')}`, '#5B6E4E');
   window._checkinSearch='';
 }
 window.quickAddAndCheckin = function(){
@@ -491,23 +521,23 @@ window.quickAddAndCheckin = function(){
   setTimeout(()=>{ const el=document.getElementById('newPlayerName'); if(el && name) el.value = name; },50);
 }
 window.markLeftEarly = async function(participantId){
-  if (!confirm('ยืนยันว่าออกก่อนจบ (Left Early)?')) return;
+  if (!confirm(t('ยืนยันว่าออกก่อนจบ (Left Early)?','Confirm this player left early?'))) return;
   await updateDoc(doc(db, `sessions/${currentSessionId}/participants`, participantId), {
     status:'left_early', leftAt: serverTimestamp()
   });
-  toast('บันทึกแล้ว');
+  toast(t('บันทึกแล้ว','Saved'));
 }
 window.reactivatePlayer = async function(participantId){
   await updateDoc(doc(db, `sessions/${currentSessionId}/participants`, participantId), {
     status:'active', leftAt:null
   });
-  toast('กลับมา active แล้ว');
+  toast(t('กลับมา active แล้ว','Back to active'));
 }
 
 /* ---------------- ADMIN: MATCH GENERATION ---------------- */
 window.generateMatch = function(){
   const active = currentParticipants.filter(p=>p.status==='active');
-  if (active.length < 4){ toast('ต้องมีผู้เล่น active อย่างน้อย 4 คน', '#B23B3B'); return; }
+  if (active.length < 4){ toast(t('ต้องมีผู้เล่น active อย่างน้อย 4 คน','Need at least 4 active players'), '#B23B3B'); return; }
 
   // sort by gamesPlayedToday asc, then waitingSince asc (earlier = longer wait)
   const sorted = [...active].sort((a,b)=>{
@@ -549,8 +579,8 @@ window.reshuffleMatch = function(){
 window.confirmAndRecordMatch = async function(){
   const s1 = parseInt(document.getElementById('scoreT1').value);
   const s2 = parseInt(document.getElementById('scoreT2').value);
-  if (isNaN(s1)||isNaN(s2)){ toast('กรอกคะแนนให้ครบ', '#B23B3B'); return; }
-  if (s1===s2){ toast('คะแนนห้ามเท่ากัน (ไม่มีเสมอ)', '#B23B3B'); return; }
+  if (isNaN(s1)||isNaN(s2)){ toast(t('กรอกคะแนนให้ครบ','Enter both scores'), '#B23B3B'); return; }
+  if (s1===s2){ toast(t('คะแนนห้ามเท่ากัน (ไม่มีเสมอ)','Scores cannot be equal (no ties)'), '#B23B3B'); return; }
 
   const [t1a,t1b] = pendingMatch.team1;
   const [t2a,t2b] = pendingMatch.team2;
@@ -598,7 +628,7 @@ window.confirmAndRecordMatch = async function(){
     });
   }
 
-  toast('บันทึกผลแล้ว', '#5B6E4E');
+  toast(t('บันทึกผลแล้ว','Result saved'), '#5B6E4E');
   pendingMatch = null;
 }
 
@@ -615,12 +645,15 @@ function renderHeader(){
         <div class="brand-mark">🏓</div>
         <div class="brand-text">
           <div class="name display">Soi Sideout</div>
-          <div class="sub">Saturday League</div>
+          <div class="sub">${t('Saturday League','Saturday League')}</div>
         </div>
       </div>
-      ${isAdmin
-        ? `<button class="admin-btn logged" onclick="handleLogout()">ออกจากระบบ</button>`
-        : `<button class="admin-btn" onclick="openLogin()">Admin</button>`}
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="admin-btn" onclick="toggleLang()" style="padding:8px 10px;">${lang==='th'?'🇹🇭 TH':'🇬🇧 EN'}</button>
+        ${isAdmin
+          ? `<button class="admin-btn logged" onclick="handleLogout()">${t('ออกจากระบบ','Logout')}</button>`
+          : `<button class="admin-btn" onclick="openLogin()">Admin</button>`}
+      </div>
     </div>`;
 }
 
@@ -631,7 +664,7 @@ function renderBanner(){
   if (!s) return '';
   return `
     <div class="banner ${active?'live':''}">
-      <div class="banner-eyebrow"><span class="dot ${active?'pulse':''}"></span>${active?'กำลังเล่นอยู่ตอนนี้':'ครั้งต่อไป'}</div>
+      <div class="banner-eyebrow"><span class="dot ${active?'pulse':''}"></span>${active?t('กำลังเล่นอยู่ตอนนี้','Live now'):t('ครั้งต่อไป','Next up')}</div>
       <div class="banner-title display">${esc(fmtDate(s.date))}</div>
       <div class="banner-meta">
         <span>📍 ${esc(s.location)}</span>
@@ -642,28 +675,30 @@ function renderBanner(){
 
 /* ---- GUEST VIEW ---- */
 function renderGuest(){
+  return `${renderHeader()}${renderGuestBody()}`;
+}
+function renderGuestBody(){
   const list = getFilteredPlayers();
   const activeCount = filterMinGames>0;
   return `
-    ${renderHeader()}
     ${renderBanner()}
     <div class="search-box">
       <span>🔍</span>
-      <input type="text" placeholder="ค้นหาชื่อผู้เล่น..." value="${esc(searchQuery)}" oninput="onSearchInput(this.value)">
+      <input type="text" placeholder="${t('ค้นหาชื่อผู้เล่น...','Search player name...')}" value="${esc(searchQuery)}" oninput="onSearchInput(this.value)">
     </div>
     <div class="filter-row">
       <div class="pill-group">
-        <button class="pill ${filterGender==='all'?'active':''}" onclick="setGenderFilter('all')">ทั้งหมด</button>
-        <button class="pill ${filterGender==='M'?'active':''}" onclick="setGenderFilter('M')">ชาย</button>
-        <button class="pill ${filterGender==='F'?'active':''}" onclick="setGenderFilter('F')">หญิง</button>
+        <button class="pill ${filterGender==='all'?'active':''}" onclick="setGenderFilter('all')">${t('ทั้งหมด','All')}</button>
+        <button class="pill ${filterGender==='M'?'active':''}" onclick="setGenderFilter('M')">${t('ชาย','Male')}</button>
+        <button class="pill ${filterGender==='F'?'active':''}" onclick="setGenderFilter('F')">${t('หญิง','Female')}</button>
       </div>
-      <button class="filter-btn" onclick="openFilterSheet()">⚙️ กรอง ${activeCount?`<span class="filter-badge">1</span>`:''}</button>
+      <button class="filter-btn" onclick="openFilterSheet()">⚙️ ${t('กรอง','Filter')} ${activeCount?`<span class="filter-badge">1</span>`:''}</button>
     </div>
-    <div class="section-label"><span>อันดับผู้เล่น · ${list.length} คน</span></div>
+    <div class="section-label"><span>${t('อันดับผู้เล่น','Leaderboard')} · ${list.length} ${t('คน','players')}</span></div>
     <div class="board">
-      ${list.length ? list.map((p,i)=>renderPlayerCard(p,i)).join('') : `<div class="empty-note">ไม่พบผู้เล่นตามเงื่อนไขนี้</div>`}
+      ${list.length ? list.map((p,i)=>renderPlayerCard(p,i)).join('') : `<div class="empty-note">${t('ไม่พบผู้เล่นตามเงื่อนไขนี้','No players match this filter')}</div>`}
     </div>
-    <div class="footer-note">Soi Sideout · เล่นด้วยกัน ทุกเสาร์</div>`;
+    <div class="footer-note">${t('Soi Sideout · เล่นด้วยกัน ทุกเสาร์','Soi Sideout · playing together every Saturday')}</div>`;
 }
 
 function renderPlayerCard(p, i){
@@ -675,7 +710,7 @@ function renderPlayerCard(p, i){
       <div class="rank-badge">${badge}</div>
       <div class="card-info">
         <div class="card-name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
-        <div class="card-sub">เล่น ${p.totalGamesPlayed||0} เกม</div>
+        <div class="card-sub">${t('เล่น','Played')} ${p.totalGamesPlayed||0} ${t('เกม','games')}</div>
       </div>
       <div class="card-stats">
         <div class="stat-score">${p.totalScore||1000}</div>
@@ -689,10 +724,12 @@ function renderAdmin(){
   return `
     ${renderHeader()}
     <div class="admin-tabs">
-      <button class="admin-tab ${adminTab==='sessions'?'active':''}" onclick="setAdminTab('sessions')">📅 Sessions</button>
-      <button class="admin-tab ${adminTab==='players'?'active':''}" onclick="setAdminTab('players')">👥 ผู้เล่น</button>
-      ${currentSessionId?`<button class="admin-tab ${adminTab==='live'?'active':''}" onclick="setAdminTab('live')">🔴 กำลังจัดการ</button>`:''}
+      <button class="admin-tab ${adminTab==='home'?'active':''}" onclick="setAdminTab('home')">🏠 ${t('หน้าแรก','Home')}</button>
+      <button class="admin-tab ${adminTab==='sessions'?'active':''}" onclick="setAdminTab('sessions')">📅 ${t('Sessions','Sessions')}</button>
+      <button class="admin-tab ${adminTab==='players'?'active':''}" onclick="setAdminTab('players')">👥 ${t('ผู้เล่น','Players')}</button>
+      ${currentSessionId?`<button class="admin-tab ${adminTab==='live'?'active':''}" onclick="setAdminTab('live')">🔴 ${t('กำลังจัดการ','Managing')}</button>`:''}
     </div>
+    ${adminTab==='home' ? renderGuestBody() : ''}
     ${adminTab==='sessions' ? renderAdminSessions() : ''}
     ${adminTab==='players' ? renderAdminPlayers() : ''}
     ${adminTab==='live' ? renderAdminLive() : ''}
@@ -703,8 +740,8 @@ window.setAdminTab = function(t){ adminTab = t; render(); }
 function renderAdminSessions(){
   const sorted = [...sessions].sort((a,b)=>b.date.localeCompare(a.date));
   return `
-    <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="openCreateSession()">+ สร้าง Session ใหม่</button>
-    <div class="section-label">Sessions ทั้งหมด</div>
+    <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="openCreateSession()">+ ${t('สร้าง Session ใหม่','Create new session')}</button>
+    <div class="section-label">${t('Sessions ทั้งหมด','All sessions')}</div>
     ${sorted.length? sorted.map(s=>`
       <div class="list-item" style="align-items:flex-start;">
         <div style="flex:1;cursor:pointer;" onclick="openSessionDetail('${s.id}')">
@@ -712,24 +749,24 @@ function renderAdminSessions(){
           <div class="meta">📍 ${esc(s.location)} · 🕒 ${esc(s.startTime)}-${esc(s.endTime)}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;">
-          ${s.status==='upcoming'?`<button class="btn btn-olive btn-sm" onclick="startSession('${s.id}')">เริ่ม</button>`:''}
-          ${s.status==='active'?`<button class="btn btn-outline btn-sm" onclick="openSessionDetail('${s.id}')">จัดการ</button>`:''}
-          ${s.status==='upcoming'?`<button class="btn btn-danger btn-sm" onclick="deleteSessionConfirm('${s.id}')">ลบ</button>`:''}
+          ${s.status==='upcoming'?`<button class="btn btn-olive btn-sm" onclick="startSession('${s.id}')">${t('เริ่ม','Start')}</button>`:''}
+          ${s.status==='active'?`<button class="btn btn-outline btn-sm" onclick="openSessionDetail('${s.id}')">${t('จัดการ','Manage')}</button>`:''}
+          ${s.status==='upcoming'?`<button class="btn btn-danger btn-sm" onclick="deleteSessionConfirm('${s.id}')">${t('ลบ','Delete')}</button>`:''}
         </div>
-      </div>`).join('') : `<div class="empty-note">ยังไม่มี session</div>`}
+      </div>`).join('') : `<div class="empty-note">${t('ยังไม่มี session','No sessions yet')}</div>`}
   `;
 }
 
 function renderAdminPlayers(){
   const sorted = [...players].sort((a,b)=>(b.totalScore||0)-(a.totalScore||0));
   return `
-    <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="openAddPlayer()">+ เพิ่มผู้เล่นใหม่</button>
-    <div class="section-label">ผู้เล่นทั้งหมด · ${players.length} คน</div>
+    <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="openAddPlayer()">+ ${t('เพิ่มผู้เล่นใหม่','Add new player')}</button>
+    <div class="section-label">${t('ผู้เล่นทั้งหมด','All players')} · ${players.length} ${t('คน','players')}</div>
     ${sorted.map(p=>`
       <div class="list-item">
         <div>
           <div class="name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
-          <div class="meta">${p.totalScore||1000} คะแนน · Win ${winrate(p)}% · ${p.totalGamesPlayed||0} เกม</div>
+          <div class="meta">${p.totalScore||1000} ${t('คะแนน','pts')} · Win ${winrate(p)}% · ${p.totalGamesPlayed||0} ${t('เกม','games')}</div>
         </div>
       </div>`).join('')}
   `;
@@ -737,13 +774,11 @@ function renderAdminPlayers(){
 
 function renderAdminLive(){
   const session = sessions.find(s=>s.id===currentSessionId);
-  if (!session) return `<div class="empty-note">ไม่พบ session</div>`;
+  if (!session) return `<div class="empty-note">${t('ไม่พบ session','Session not found')}</div>`;
   const active = currentParticipants.filter(p=>p.status==='active');
   const leftEarly = currentParticipants.filter(p=>p.status==='left_early');
   const checkedInIds = currentParticipants.map(p=>p.id);
-  const searchResults = window._checkinSearch
-    ? players.filter(p=>p.name.toLowerCase().includes(window._checkinSearch) && !checkedInIds.includes(p.id)).slice(0,6)
-    : [];
+  const notCheckedIn = [...players].filter(p=>!checkedInIds.includes(p.id)).sort((a,b)=>a.name.localeCompare(b.name));
 
   return `
     <div class="banner ${session.status==='active'?'live':''}" style="margin-bottom:14px;">
@@ -753,52 +788,45 @@ function renderAdminLive(){
     </div>
 
     ${pendingMatch ? renderPendingMatch() : `
-      <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="generateMatch()">🎲 สุ่มจับคู่ Match ถัดไป</button>`}
+      <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="generateMatch()">🎲 ${t('สุ่มจับคู่ Match ถัดไป','Generate next match')}</button>`}
 
-    <div class="section-label">Check-in ผู้เล่น</div>
-    <div class="search-box">
-      <span>🔍</span>
-      <input id="checkinSearchInput" type="text" placeholder="ค้นหาชื่อเพื่อ check-in..." oninput="onCheckinSearch(this.value)">
+    <div class="section-label">${t('Check-in ผู้เล่น','Check-in players')}</div>
+    <div class="field" style="margin-bottom:8px;">
+      <select id="checkinSelect">
+        <option value="">${t(`— เลือกผู้เล่น (${notCheckedIn.length} คนในระบบ) —`, `— Select player (${notCheckedIn.length} in database) —`)}</option>
+        ${notCheckedIn.map(p=>`<option value="${p.id}">${esc(p.name)} (${genderLabel(p.gender)})</option>`).join('')}
+      </select>
     </div>
-    ${window._checkinSearch ? `
-      <div style="margin-bottom:14px;">
-        ${searchResults.map(p=>`
-          <div class="list-item">
-            <div class="name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
-            <button class="btn btn-olive btn-sm" onclick="checkInPlayer('${p.id}')">Check-in</button>
-          </div>`).join('')}
-        ${searchResults.length===0 ? `
-          <div class="list-item">
-            <div class="meta">ไม่พบชื่อนี้ในระบบ</div>
-            <button class="btn btn-primary btn-sm" onclick="quickAddAndCheckin()">+ เพิ่มผู้เล่นใหม่</button>
-          </div>`:''}
-      </div>` : ''}
+    <div class="row2" style="margin-bottom:16px;">
+      <button class="btn btn-olive btn-block" onclick="checkInFromDropdown()">✅ ${t('Check-in','Check-in')}</button>
+      <button class="btn btn-outline btn-block" onclick="openAddPlayer((newId)=>checkInPlayer(newId))">+ ${t('เพิ่มผู้เล่นใหม่','Add new player')}</button>
+    </div>
 
-    <div class="section-label">Active วันนี้ · ${active.length} คน</div>
+    <div class="section-label">${t('Active วันนี้','Active today')} · ${active.length} ${t('คน','players')}</div>
     ${active.length? active.map(p=>`
       <div class="list-item">
         <div>
           <div class="name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
-          <div class="meta">เล่นแล้ว ${p.gamesPlayedToday||0} เกมวันนี้</div>
+          <div class="meta">${t('เล่นแล้ว','Played')} ${p.gamesPlayedToday||0} ${t('เกมวันนี้','games today')}</div>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="markLeftEarly('${p.id}')">Left Early</button>
-      </div>`).join('') : `<div class="empty-note">ยังไม่มีผู้เล่น check-in</div>`}
+        <button class="btn btn-outline btn-sm" onclick="markLeftEarly('${p.id}')">${t('ออกก่อน','Left early')}</button>
+      </div>`).join('') : `<div class="empty-note">${t('ยังไม่มีผู้เล่น check-in','No players checked in yet')}</div>`}
 
     ${leftEarly.length? `
-      <div class="section-label" style="margin-top:16px;">ออกก่อนจบ · ${leftEarly.length} คน</div>
+      <div class="section-label" style="margin-top:16px;">${t('ออกก่อนจบ','Left early')} · ${leftEarly.length} ${t('คน','players')}</div>
       ${leftEarly.map(p=>`
         <div class="list-item">
-          <div class="name">${esc(p.name)} <span class="status-tag status-left">left early</span></div>
-          <button class="btn btn-outline btn-sm" onclick="reactivatePlayer('${p.id}')">กลับมา Active</button>
+          <div class="name">${esc(p.name)} <span class="status-tag status-left">${t('ออกก่อน','left early')}</span></div>
+          <button class="btn btn-outline btn-sm" onclick="reactivatePlayer('${p.id}')">${t('กลับมา Active','Reactivate')}</button>
         </div>`).join('')}
     ` : ''}
 
-    <div class="section-label" style="margin-top:16px;">ผลการแข่งขันวันนี้</div>
-    ${currentMatches.length? currentMatches.map(m=>renderMatchHistory(m)).join('') : `<div class="empty-note">ยังไม่มีการแข่งขัน</div>`}
+    <div class="section-label" style="margin-top:16px;">${t('ผลการแข่งขันวันนี้','Match results today')}</div>
+    ${currentMatches.length? currentMatches.map(m=>renderMatchHistory(m)).join('') : `<div class="empty-note">${t('ยังไม่มีการแข่งขัน','No matches yet')}</div>`}
 
     <div class="row2" style="margin-top:20px;">
-      <button class="btn btn-outline btn-block" onclick="setAdminTab('sessions')">กลับหน้า Sessions</button>
-      ${session.status==='active'?`<button class="btn btn-danger btn-block" onclick="completeSession('${session.id}')">จบ Session</button>`:''}
+      <button class="btn btn-outline btn-block" onclick="setAdminTab('sessions')">${t('กลับหน้า Sessions','Back to Sessions')}</button>
+      ${session.status==='active'?`<button class="btn btn-danger btn-block" onclick="completeSession('${session.id}')">${t('จบ Session','End Session')}</button>`:''}
     </div>
   `;
 }
@@ -809,7 +837,7 @@ function renderPendingMatch(){
   const p1a=playerById(t1a), p1b=playerById(t1b), p2a=playerById(t2a), p2b=playerById(t2b);
   return `
     <div class="match-card" style="margin-bottom:16px;">
-      <div class="section-label" style="margin:0 0 10px;">Match ใหม่ — กรอกคะแนนแล้วบันทึก</div>
+      <div class="section-label" style="margin:0 0 10px;">${t('Match ใหม่ — กรอกคะแนนแล้วบันทึก','New match — enter scores and save')}</div>
       <div class="team-row">
         <div class="team-names">${esc(p1a?.name)} + ${esc(p1b?.name)}</div>
         <input class="score-input" id="scoreT1" type="number" placeholder="0">
@@ -820,10 +848,10 @@ function renderPendingMatch(){
         <input class="score-input" id="scoreT2" type="number" placeholder="0">
       </div>
       <div class="row2" style="margin-top:12px;">
-        <button class="btn btn-outline btn-block" onclick="reshuffleMatch()">🔄 สุ่มใหม่</button>
-        <button class="btn btn-outline btn-block" onclick="cancelPendingMatch()">ยกเลิก</button>
+        <button class="btn btn-outline btn-block" onclick="reshuffleMatch()">🔄 ${t('สุ่มใหม่','Reshuffle')}</button>
+        <button class="btn btn-outline btn-block" onclick="cancelPendingMatch()">${t('ยกเลิก','Cancel')}</button>
       </div>
-      <button class="btn btn-primary btn-block" style="margin-top:8px;" onclick="confirmAndRecordMatch()">✅ ยืนยันบันทึกผล</button>
+      <button class="btn btn-primary btn-block" style="margin-top:8px;" onclick="confirmAndRecordMatch()">✅ ${t('ยืนยันบันทึกผล','Confirm & save result')}</button>
     </div>`;
 }
 
@@ -833,7 +861,7 @@ function renderMatchHistory(m){
   const w1 = m.winnerTeam===1;
   return `
     <div class="match-card">
-      <div style="font-size:11px;color:#B3A594;font-weight:700;margin-bottom:6px;">Round ${m.roundNumber}</div>
+      <div style="font-size:11px;color:#B3A594;font-weight:700;margin-bottom:6px;">${t('รอบที่','Round')} ${m.roundNumber}</div>
       <div class="team-row">
         <div class="team-names" style="color:${w1?'var(--olive)':'var(--ink)'}">${w1?'🏆 ':''}${esc(p1a?.name)} + ${esc(p1b?.name)}</div>
         <div class="team-names">${m.score1}</div>
@@ -845,6 +873,7 @@ function renderMatchHistory(m){
     </div>`;
 }
 
+applyStaticTranslations();
 render();
 </script>
 </body>
