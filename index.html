@@ -210,7 +210,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  getFirestore, collection, collectionGroup, doc, setDoc, addDoc, updateDoc, deleteDoc,
+  getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc,
   onSnapshot, query, orderBy, serverTimestamp, getDocs, getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -233,7 +233,6 @@ let sessions = [];         // all sessions from DB
 let currentSessionId = null; // session admin is currently managing
 let currentParticipants = []; // participants of currentSessionId
 let currentMatches = [];
-let allMatches = []; // matches across every session, for player history
 let pendingMatch = null;   // {team1:[id,id], team2:[id,id]}
 let filterGender = 'all';
 let filterSort = 'score';
@@ -341,10 +340,6 @@ onSnapshot(collection(db,'sessions'), (snap)=>{
   sessions = snap.docs.map(d=>({id:d.id, ...d.data()}));
   render();
 });
-onSnapshot(collectionGroup(db,'matches'), (snap)=>{
-  allMatches = snap.docs.map(d=>({id:d.id, sessionId:d.ref.parent.parent.id, ...d.data()}));
-  render();
-});
 
 function listenSessionDetail(sessionId){
   if (!sessionId) return;
@@ -447,12 +442,34 @@ window.closeModal = function(){
 }
 
 /* ---------------- PLAYER DETAIL / HISTORY ---------------- */
-window.openPlayerDetail = function(playerId){
+window.openPlayerDetail = async function(playerId){
   const p = playerById(playerId);
   if (!p) return;
-  const history = allMatches
-    .filter(m => [m.team1.p1, m.team1.p2, m.team2.p1, m.team2.p2].includes(playerId))
-    .sort((a,b)=> (b.playedAt?.toMillis?.()||0) - (a.playedAt?.toMillis?.()||0));
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="overlay show" id="playerDetailOverlay">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div class="empty-note">${t('กำลังโหลดประวัติ...','Loading history...')}</div>
+      </div>
+    </div>`;
+
+  const history = [];
+  for (const s of sessions){
+    try{
+      const snap = await getDocs(collection(db, `sessions/${s.id}/matches`));
+      snap.forEach(d=>{
+        const data = d.data();
+        if ([data.team1.p1, data.team1.p2, data.team2.p1, data.team2.p2].includes(playerId)){
+          history.push({ id:d.id, sessionId:s.id, ...data });
+        }
+      });
+    }catch(e){ console.error('Failed to load matches for session', s.id, e); }
+  }
+  history.sort((a,b)=> (b.playedAt?.toMillis?.()||0) - (a.playedAt?.toMillis?.()||0));
+  renderPlayerDetailSheet(p, history, playerId);
+}
+function renderPlayerDetailSheet(p, history, playerId){
   const root = document.getElementById('modalRoot');
   root.innerHTML = `
     <div class="overlay show" id="playerDetailOverlay">
@@ -963,6 +980,8 @@ function renderAdminSummary(){
         </div>`;
       }).join('') : `<div class="empty-note">${t('ไม่มีข้อมูลการแข่งขัน','No match data')}</div>`}
     </div>
+    <div class="section-label" style="margin-top:20px;">${t('ตารางการแข่งขันทั้งหมด','All matches this session')} · ${currentMatches.length} ${t('แมตช์','matches')}</div>
+    ${currentMatches.length ? currentMatches.map(m=>renderMatchHistory(m)).join('') : `<div class="empty-note">${t('ไม่มีการแข่งขัน','No matches')}</div>`}
     <button class="btn btn-outline btn-block" style="margin-top:20px;" onclick="setAdminTab('sessions')">${t('กลับหน้า Sessions','Back to Sessions')}</button>
   `;
 }
