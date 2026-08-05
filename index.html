@@ -192,9 +192,9 @@
     <div class="field">
       <label id="minGamesLabel">เล่นอย่างน้อย (เกม)</label>
       <select id="minGames">
-        <option value="0" id="minOpt0">ไม่กรอง</option>
+        <option value="0" id="minOpt0" selected>ไม่กรอง</option>
         <option value="3">≥ 3 เกม</option>
-        <option value="5" selected>≥ 5 เกม</option>
+        <option value="5">≥ 5 เกม</option>
         <option value="10">≥ 10 เกม</option>
       </select>
     </div>
@@ -236,7 +236,7 @@ let currentMatches = [];
 let pendingMatch = null;   // {team1:[id,id], team2:[id,id]}
 let filterGender = 'all';
 let filterSort = 'score';
-let filterMinGames = 5;
+let filterMinGames = 0;
 let searchQuery = '';
 let adminTab = 'home'; // home | sessions | players | live
 let lang = localStorage.getItem('ss_lang') || 'th';
@@ -298,6 +298,7 @@ function fmtDate(d){
   }catch(e){ return d; }
 }
 function playerById(id){ return players.find(p=>p.id===id); }
+function sessionTitle(s){ return s.name ? s.name : fmtDate(s.date); }
 
 /* ---------------- AUTH ---------------- */
 window.openLogin = function(){
@@ -447,6 +448,7 @@ window.openCreateSession = function(){
     <div class="overlay show center">
       <div class="sheet" style="max-width:360px;">
         <div class="sheet-title display">📅 ${t('สร้าง Session ใหม่','Create new session')}</div>
+        <div class="field"><label>${t('ชื่อ Session (ไม่บังคับ)','Session name (optional)')}</label><input id="sName" placeholder="${t('เช่น Saturday League Week 1','e.g. Saturday League Week 1')}"></div>
         <div class="field"><label>${t('วันที่','Date')}</label><input id="sDate" type="date"></div>
         <div class="field"><label>${t('สถานที่','Location')}</label><input id="sLocation" placeholder="${t('เช่น Sterling','e.g. Sterling')}"></div>
         <div class="row2">
@@ -461,20 +463,22 @@ window.openCreateSession = function(){
     </div>`;
 }
 window.submitCreateSession = async function(){
+  const name = document.getElementById('sName').value.trim();
   const date = document.getElementById('sDate').value;
   const location = document.getElementById('sLocation').value.trim();
   const startTime = document.getElementById('sStart').value;
   const endTime = document.getElementById('sEnd').value;
   if (!date||!location||!startTime||!endTime){ toast(t('กรอกข้อมูลให้ครบ','Fill in all fields'), '#B23B3B'); return; }
   await addDoc(collection(db,'sessions'), {
-    date, location, startTime, endTime, status:'upcoming', createdAt: serverTimestamp()
+    name: name || null, date, location, startTime, endTime, status:'upcoming', createdAt: serverTimestamp()
   });
   toast(t('สร้าง session แล้ว','Session created'), '#5B6E4E');
   closeModal();
 }
 window.openSessionDetail = function(sessionId){
   currentSessionId = sessionId;
-  adminTab = 'live';
+  const s = sessions.find(x=>x.id===sessionId);
+  adminTab = (s && s.status==='completed') ? 'summary' : 'live';
   listenSessionDetail(sessionId);
   render();
 }
@@ -486,8 +490,8 @@ window.completeSession = async function(sessionId){
   if (!confirm(t('จบ session นี้ใช่ไหม?','End this session?'))) return;
   await updateDoc(doc(db,'sessions',sessionId), { status:'completed' });
   toast(t('จบ session แล้ว','Session ended'));
-  currentSessionId = null;
-  adminTab = 'sessions';
+  adminTab = 'summary';
+  render();
 }
 window.deleteSessionConfirm = async function(sessionId){
   if (!confirm(t('ลบ session นี้ถาวร? (ใช้เมื่อสร้างผิด)','Permanently delete this session? (use if created by mistake)'))) return;
@@ -665,8 +669,9 @@ function renderBanner(){
   return `
     <div class="banner ${active?'live':''}">
       <div class="banner-eyebrow"><span class="dot ${active?'pulse':''}"></span>${active?t('กำลังเล่นอยู่ตอนนี้','Live now'):t('ครั้งต่อไป','Next up')}</div>
-      <div class="banner-title display">${esc(fmtDate(s.date))}</div>
+      <div class="banner-title display">${esc(sessionTitle(s))}</div>
       <div class="banner-meta">
+        ${s.name?`<span>📅 ${esc(fmtDate(s.date))}</span>`:''}
         <span>📍 ${esc(s.location)}</span>
         <span>🕒 ${esc(s.startTime)} – ${esc(s.endTime)}</span>
       </div>
@@ -721,18 +726,21 @@ function renderPlayerCard(p, i){
 
 /* ---- ADMIN VIEW ---- */
 function renderAdmin(){
+  const curSession = sessions.find(s=>s.id===currentSessionId);
   return `
     ${renderHeader()}
     <div class="admin-tabs">
       <button class="admin-tab ${adminTab==='home'?'active':''}" onclick="setAdminTab('home')">🏠 ${t('หน้าแรก','Home')}</button>
       <button class="admin-tab ${adminTab==='sessions'?'active':''}" onclick="setAdminTab('sessions')">📅 ${t('Sessions','Sessions')}</button>
       <button class="admin-tab ${adminTab==='players'?'active':''}" onclick="setAdminTab('players')">👥 ${t('ผู้เล่น','Players')}</button>
-      ${currentSessionId?`<button class="admin-tab ${adminTab==='live'?'active':''}" onclick="setAdminTab('live')">🔴 ${t('กำลังจัดการ','Managing')}</button>`:''}
+      ${currentSessionId && curSession?.status==='active' ? `<button class="admin-tab ${adminTab==='live'?'active':''}" onclick="setAdminTab('live')">🔴 ${t('กำลังจัดการ','Managing')}</button>` : ''}
+      ${currentSessionId && curSession?.status==='completed' ? `<button class="admin-tab ${adminTab==='summary'?'active':''}" onclick="setAdminTab('summary')">🏆 ${t('สรุปผล','Summary')}</button>` : ''}
     </div>
     ${adminTab==='home' ? renderGuestBody() : ''}
     ${adminTab==='sessions' ? renderAdminSessions() : ''}
     ${adminTab==='players' ? renderAdminPlayers() : ''}
     ${adminTab==='live' ? renderAdminLive() : ''}
+    ${adminTab==='summary' ? renderAdminSummary() : ''}
   `;
 }
 window.setAdminTab = function(t){ adminTab = t; render(); }
@@ -745,12 +753,13 @@ function renderAdminSessions(){
     ${sorted.length? sorted.map(s=>`
       <div class="list-item" style="align-items:flex-start;">
         <div style="flex:1;cursor:pointer;" onclick="openSessionDetail('${s.id}')">
-          <div class="name">${esc(fmtDate(s.date))} <span class="status-tag status-${s.status}">${s.status}</span></div>
-          <div class="meta">📍 ${esc(s.location)} · 🕒 ${esc(s.startTime)}-${esc(s.endTime)}</div>
+          <div class="name">${esc(sessionTitle(s))} <span class="status-tag status-${s.status}">${s.status}</span></div>
+          <div class="meta">${s.name?`${esc(fmtDate(s.date))} · `:''}📍 ${esc(s.location)} · 🕒 ${esc(s.startTime)}-${esc(s.endTime)}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${s.status==='upcoming'?`<button class="btn btn-olive btn-sm" onclick="startSession('${s.id}')">${t('เริ่ม','Start')}</button>`:''}
           ${s.status==='active'?`<button class="btn btn-outline btn-sm" onclick="openSessionDetail('${s.id}')">${t('จัดการ','Manage')}</button>`:''}
+          ${s.status==='completed'?`<button class="btn btn-outline btn-sm" onclick="openSessionDetail('${s.id}')">🏆 ${t('สรุปผล','Summary')}</button>`:''}
           ${s.status==='upcoming'?`<button class="btn btn-danger btn-sm" onclick="deleteSessionConfirm('${s.id}')">${t('ลบ','Delete')}</button>`:''}
         </div>
       </div>`).join('') : `<div class="empty-note">${t('ยังไม่มี session','No sessions yet')}</div>`}
@@ -783,8 +792,8 @@ function renderAdminLive(){
   return `
     <div class="banner ${session.status==='active'?'live':''}" style="margin-bottom:14px;">
       <div class="banner-eyebrow"><span class="dot ${session.status==='active'?'pulse':''}"></span>${session.status}</div>
-      <div class="banner-title display">${esc(fmtDate(session.date))}</div>
-      <div class="banner-meta"><span>📍 ${esc(session.location)}</span><span>🕒 ${esc(session.startTime)}-${esc(session.endTime)}</span></div>
+      <div class="banner-title display">${esc(sessionTitle(session))}</div>
+      <div class="banner-meta">${session.name?`<span>📅 ${esc(fmtDate(session.date))}</span>`:''}<span>📍 ${esc(session.location)}</span><span>🕒 ${esc(session.startTime)}-${esc(session.endTime)}</span></div>
     </div>
 
     ${pendingMatch ? renderPendingMatch() : `
@@ -828,6 +837,66 @@ function renderAdminLive(){
       <button class="btn btn-outline btn-block" onclick="setAdminTab('sessions')">${t('กลับหน้า Sessions','Back to Sessions')}</button>
       ${session.status==='active'?`<button class="btn btn-danger btn-block" onclick="completeSession('${session.id}')">${t('จบ Session','End Session')}</button>`:''}
     </div>
+  `;
+}
+
+function computeSessionStats(){
+  const stats = {};
+  currentParticipants.forEach(p=>{
+    stats[p.id] = { id:p.id, name:p.name, gender:p.gender, wins:0, losses:0, netScore:0, gamesPlayed:0 };
+  });
+  currentMatches.forEach(m=>{
+    const t1ids = [m.team1.p1, m.team1.p2];
+    const t2ids = [m.team2.p1, m.team2.p2];
+    const w1 = m.winnerTeam===1;
+    t1ids.forEach(id=>{
+      if (!stats[id]) stats[id] = { id, name: playerById(id)?.name || '?', gender: playerById(id)?.gender||'M', wins:0, losses:0, netScore:0, gamesPlayed:0 };
+      stats[id].gamesPlayed++;
+      if (w1){ stats[id].wins++; stats[id].netScore += m.scoreDiff; } else { stats[id].losses++; stats[id].netScore -= m.scoreDiff; }
+    });
+    t2ids.forEach(id=>{
+      if (!stats[id]) stats[id] = { id, name: playerById(id)?.name || '?', gender: playerById(id)?.gender||'M', wins:0, losses:0, netScore:0, gamesPlayed:0 };
+      stats[id].gamesPlayed++;
+      if (!w1){ stats[id].wins++; stats[id].netScore += m.scoreDiff; } else { stats[id].losses++; stats[id].netScore -= m.scoreDiff; }
+    });
+  });
+  return Object.values(stats).sort((a,b)=> b.wins-a.wins || b.netScore-a.netScore);
+}
+
+function renderAdminSummary(){
+  const session = sessions.find(s=>s.id===currentSessionId);
+  if (!session) return `<div class="empty-note">${t('ไม่พบ session','Session not found')}</div>`;
+  const ranked = computeSessionStats();
+  return `
+    <div class="banner" style="margin-bottom:14px;">
+      <div class="banner-eyebrow"><span class="dot"></span>${t('สรุปผล League','League summary')}</div>
+      <div class="banner-title display">${esc(sessionTitle(session))}</div>
+      <div class="banner-meta">
+        ${session.name?`<span>📅 ${esc(fmtDate(session.date))}</span>`:''}
+        <span>📍 ${esc(session.location)}</span>
+      </div>
+    </div>
+    <div class="section-label">${t('อันดับประจำวัน','Ranking for this session')} · ${ranked.length} ${t('คน','players')}</div>
+    <div class="board">
+      ${ranked.length ? ranked.map((p,i)=>{
+        const rank=i+1;
+        const cls = rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
+        const badge = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank;
+        return `
+        <div class="card ${cls}">
+          <div class="rank-badge">${badge}</div>
+          <div class="card-info">
+            <div class="card-name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
+            <div class="card-sub">${p.wins}${t('ชนะ','W')} - ${p.losses}${t('แพ้','L')} · ${p.gamesPlayed} ${t('เกม','games')}</div>
+          </div>
+          <div class="card-stats">
+            <div class="stat-score">${p.netScore>0?'+':''}${p.netScore}</div>
+            <div class="stat-winrate">${t('คะแนนสุทธิ','net score')}</div>
+          </div>
+        </div>`;
+      }).join('') : `<div class="empty-note">${t('ไม่มีข้อมูลการแข่งขัน','No match data')}</div>`}
+    </div>
+    <button class="btn btn-outline btn-block" style="margin-top:20px;" onclick="setAdminTab('sessions')">${t('กลับหน้า Sessions','Back to Sessions')}</button>
   `;
 }
 
