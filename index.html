@@ -210,7 +210,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc,
+  getFirestore, collection, collectionGroup, doc, setDoc, addDoc, updateDoc, deleteDoc,
   onSnapshot, query, orderBy, serverTimestamp, getDocs, getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -233,6 +233,7 @@ let sessions = [];         // all sessions from DB
 let currentSessionId = null; // session admin is currently managing
 let currentParticipants = []; // participants of currentSessionId
 let currentMatches = [];
+let allMatches = []; // matches across every session, for player history
 let pendingMatch = null;   // {team1:[id,id], team2:[id,id]}
 let filterGender = 'all';
 let filterSort = 'score';
@@ -340,6 +341,10 @@ onSnapshot(collection(db,'sessions'), (snap)=>{
   sessions = snap.docs.map(d=>({id:d.id, ...d.data()}));
   render();
 });
+onSnapshot(collectionGroup(db,'matches'), (snap)=>{
+  allMatches = snap.docs.map(d=>({id:d.id, sessionId:d.ref.parent.parent.id, ...d.data()}));
+  render();
+});
 
 function listenSessionDetail(sessionId){
   if (!sessionId) return;
@@ -439,6 +444,68 @@ window.submitAddPlayer = async function(){
 }
 window.closeModal = function(){
   document.getElementById('modalRoot').innerHTML = '';
+}
+
+/* ---------------- PLAYER DETAIL / HISTORY ---------------- */
+window.openPlayerDetail = function(playerId){
+  const p = playerById(playerId);
+  if (!p) return;
+  const history = allMatches
+    .filter(m => [m.team1.p1, m.team1.p2, m.team2.p1, m.team2.p2].includes(playerId))
+    .sort((a,b)=> (b.playedAt?.toMillis?.()||0) - (a.playedAt?.toMillis?.()||0));
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="overlay show" id="playerDetailOverlay">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;gap:10px;">
+          <div>
+            <div class="sheet-title display" style="margin-bottom:2px;">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
+            <div style="font-size:12px;color:#8A7D6C;font-weight:600;">${p.totalScore||1000} ${t('คะแนน','pts')} · Win ${winrate(p)}% · ${p.totalGamesPlayed||0} ${t('เกม','games')}</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="closeModal()">${t('ปิด','Close')}</button>
+        </div>
+        <div class="section-label">${t('ประวัติการเล่น','Match history')} · ${history.length} ${t('เกม','games')}</div>
+        ${history.length ? history.map(m=>renderPlayerHistoryItem(m, playerId)).join('') : `<div class="empty-note">${t('ยังไม่มีประวัติการเล่น','No match history yet')}</div>`}
+        ${isAdmin ? `
+          <button class="btn btn-danger btn-block" style="margin-top:18px;" onclick="deletePlayerConfirm('${playerId}')">🗑️ ${t('ลบผู้เล่นนี้ (สำหรับล้างข้อมูลทดสอบ)','Delete this player (for clearing test data)')}</button>
+        ` : ''}
+      </div>
+    </div>`;
+}
+function renderPlayerHistoryItem(m, playerId){
+  const inTeam1 = m.team1.p1===playerId || m.team1.p2===playerId;
+  const partnerId = inTeam1 ? (m.team1.p1===playerId ? m.team1.p2 : m.team1.p1) : (m.team2.p1===playerId ? m.team2.p2 : m.team2.p1);
+  const oppIds = inTeam1 ? [m.team2.p1, m.team2.p2] : [m.team1.p1, m.team1.p2];
+  const won = (inTeam1 && m.winnerTeam===1) || (!inTeam1 && m.winnerTeam===2);
+  const myScore = inTeam1 ? m.score1 : m.score2;
+  const oppScore = inTeam1 ? m.score2 : m.score1;
+  const partner = playerById(partnerId);
+  const opp1 = playerById(oppIds[0]), opp2 = playerById(oppIds[1]);
+  const session = sessions.find(s=>s.id===m.sessionId);
+  const pointChange = won ? m.scoreDiff : -m.scoreDiff;
+  return `
+    <div class="match-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:11px;color:#B3A594;font-weight:700;">${session?esc(sessionTitle(session)):''}</div>
+        <div style="font-size:11px;font-weight:800;color:${won?'var(--olive)':'var(--danger)'}">${won?t('ชนะ','WIN'):t('แพ้','LOSS')} ${pointChange>0?'+':''}${pointChange}</div>
+      </div>
+      <div class="team-row">
+        <div class="team-names">${t('คู่กับ','With')} ${esc(partner?.name || '—')}</div>
+        <div class="team-names">${myScore}</div>
+      </div>
+      <div class="vs-label">VS</div>
+      <div class="team-row">
+        <div class="team-names">${esc(opp1?.name || '—')} + ${esc(opp2?.name || '—')}</div>
+        <div class="team-names">${oppScore}</div>
+      </div>
+    </div>`;
+}
+window.deletePlayerConfirm = async function(playerId){
+  if (!confirm(t('ลบผู้เล่นนี้ถาวร? ประวัติการแข่งขันจะยังอยู่ในระบบ แต่ผู้เล่นจะหายจาก leaderboard','Permanently delete this player? Match history will remain, but they will disappear from the leaderboard'))) return;
+  await deleteDoc(doc(db,'players',playerId));
+  toast(t('ลบผู้เล่นแล้ว','Player deleted'));
+  closeModal();
 }
 
 /* ---------------- ADMIN: SESSIONS ---------------- */
@@ -711,7 +778,7 @@ function renderPlayerCard(p, i){
   const cls = rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
   const badge = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank;
   return `
-    <div class="card ${cls}">
+    <div class="card ${cls}" onclick="openPlayerDetail('${p.id}')">
       <div class="rank-badge">${badge}</div>
       <div class="card-info">
         <div class="card-name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
@@ -772,7 +839,7 @@ function renderAdminPlayers(){
     <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="openAddPlayer()">+ ${t('เพิ่มผู้เล่นใหม่','Add new player')}</button>
     <div class="section-label">${t('ผู้เล่นทั้งหมด','All players')} · ${players.length} ${t('คน','players')}</div>
     ${sorted.map(p=>`
-      <div class="list-item">
+      <div class="list-item" style="cursor:pointer;" onclick="openPlayerDetail('${p.id}')">
         <div>
           <div class="name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
           <div class="meta">${p.totalScore||1000} ${t('คะแนน','pts')} · Win ${winrate(p)}% · ${p.totalGamesPlayed||0} ${t('เกม','games')}</div>
@@ -883,7 +950,7 @@ function renderAdminSummary(){
         const cls = rank===1?'top1':rank===2?'top2':rank===3?'top3':'';
         const badge = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank;
         return `
-        <div class="card ${cls}">
+        <div class="card ${cls}" onclick="openPlayerDetail('${p.id}')">
           <div class="rank-badge">${badge}</div>
           <div class="card-info">
             <div class="card-name">${esc(p.name)} <span class="gender-tag">${genderLabel(p.gender)}</span></div>
