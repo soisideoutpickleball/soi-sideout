@@ -525,6 +525,64 @@ window.deletePlayerConfirm = async function(playerId){
   closeModal();
 }
 
+/* ---------------- DANGER ZONE: RESET ALL DATA ---------------- */
+window.openResetConfirm = function(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="overlay show center">
+      <div class="sheet" style="max-width:360px;">
+        <div class="sheet-title display" style="color:var(--danger);">⚠️ ${t('ล้างข้อมูลทั้งหมด','Reset all data')}</div>
+        <div style="font-size:13px;color:var(--ink);margin-bottom:14px;line-height:1.5;">
+          ${t('การกระทำนี้จะลบผู้เล่นทั้งหมด, session ทั้งหมด, และประวัติการแข่งขันทั้งหมดอย่างถาวร ไม่สามารถกู้คืนได้','This will permanently delete all players, sessions, and match history. This cannot be undone.')}
+        </div>
+        <div class="field">
+          <label>${t('พิมพ์ RESET เพื่อยืนยัน','Type RESET to confirm')}</label>
+          <input id="resetConfirmInput" placeholder="RESET" oninput="checkResetInput()" autocomplete="off">
+        </div>
+        <div class="row2" style="margin-top:14px;">
+          <button class="btn btn-outline btn-block" onclick="closeModal()">${t('ยกเลิก','Cancel')}</button>
+          <button class="btn btn-danger btn-block" id="resetConfirmBtn" disabled style="opacity:0.4;" onclick="executeReset()">${t('ลบทั้งหมด','Delete everything')}</button>
+        </div>
+      </div>
+    </div>`;
+}
+window.checkResetInput = function(){
+  const val = document.getElementById('resetConfirmInput').value;
+  const btn = document.getElementById('resetConfirmBtn');
+  if (val === 'RESET'){ btn.disabled=false; btn.style.opacity='1'; }
+  else { btn.disabled=true; btn.style.opacity='0.4'; }
+}
+window.executeReset = async function(){
+  const btn = document.getElementById('resetConfirmBtn');
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = t('กำลังลบ...','Deleting...');
+  try{
+    await resetAllData();
+    toast(t('ล้างข้อมูลทั้งหมดแล้ว','All data has been reset'), '#5B6E4E');
+    closeModal();
+    currentSessionId = null;
+    pendingMatch = null;
+    adminTab = 'home';
+    render();
+  }catch(e){
+    console.error(e);
+    toast(t('เกิดข้อผิดพลาด ลองใหม่อีกครั้ง','Something went wrong, try again'), '#B23B3B');
+  }
+}
+async function resetAllData(){
+  const playersSnap = await getDocs(collection(db,'players'));
+  for (const d of playersSnap.docs){ await deleteDoc(doc(db,'players',d.id)); }
+  const sessionsSnap = await getDocs(collection(db,'sessions'));
+  for (const s of sessionsSnap.docs){
+    const participantsSnap = await getDocs(collection(db, `sessions/${s.id}/participants`));
+    for (const p of participantsSnap.docs){ await deleteDoc(doc(db, `sessions/${s.id}/participants`, p.id)); }
+    const matchesSnap = await getDocs(collection(db, `sessions/${s.id}/matches`));
+    for (const m of matchesSnap.docs){ await deleteDoc(doc(db, `sessions/${s.id}/matches`, m.id)); }
+    await deleteDoc(doc(db,'sessions',s.id));
+  }
+}
+
 /* ---------------- ADMIN: SESSIONS ---------------- */
 window.openCreateSession = function(){
   const root = document.getElementById('modalRoot');
@@ -862,6 +920,14 @@ function renderAdminPlayers(){
           <div class="meta">${p.totalScore||1000} ${t('คะแนน','pts')} · Win ${winrate(p)}% · ${p.totalGamesPlayed||0} ${t('เกม','games')}</div>
         </div>
       </div>`).join('')}
+
+    <div style="margin-top:32px;padding:16px;border:1.5px dashed var(--danger);border-radius:16px;">
+      <div style="font-weight:800;font-size:13px;color:var(--danger);margin-bottom:6px;">⚠️ Danger Zone</div>
+      <div style="font-size:12px;color:#8A7D6C;margin-bottom:12px;line-height:1.5;">
+        ${t('ล้างข้อมูลผู้เล่น, session, และประวัติการแข่งขันทั้งหมด ใช้สำหรับล้างข้อมูลทดสอบก่อนเริ่มใช้งานจริง','Clear all players, sessions, and match history. Use this to wipe test data before going live.')}
+      </div>
+      <button class="btn btn-danger btn-block" onclick="openResetConfirm()">🗑️ ${t('ล้างข้อมูลทั้งหมด','Reset all data')}</button>
+    </div>
   `;
 }
 
