@@ -636,9 +636,25 @@ window.completeSession = async function(sessionId){
   render();
 }
 window.deleteSessionConfirm = async function(sessionId){
-  if (!confirm(t('ลบ session นี้ถาวร? (ใช้เมื่อสร้างผิด)','Permanently delete this session? (use if created by mistake)'))) return;
-  await deleteDoc(doc(db,'sessions',sessionId));
-  toast(t('ลบแล้ว','Deleted'));
+  const s = sessions.find(x=>x.id===sessionId);
+  const hasData = s && s.status !== 'upcoming';
+  const msg = hasData
+    ? t('Session นี้มีข้อมูลผู้เล่นและผลการแข่งขันอยู่แล้ว ลบถาวร (รวมประวัติทั้งหมด)? กระทบสถิติสะสมของผู้เล่นที่เคยเล่นด้วย ไม่สามารถกู้คืนได้','This session already has check-ins and match results. Permanently delete it (including all history)? This affects the cumulative stats of players who played in it and cannot be undone.')
+    : t('ลบ session นี้ถาวร?','Permanently delete this session?');
+  if (!confirm(msg)) return;
+  try{
+    const participantsSnap = await getDocs(collection(db, `sessions/${sessionId}/participants`));
+    for (const p of participantsSnap.docs){ await deleteDoc(doc(db, `sessions/${sessionId}/participants`, p.id)); }
+    const matchesSnap = await getDocs(collection(db, `sessions/${sessionId}/matches`));
+    for (const m of matchesSnap.docs){ await deleteDoc(doc(db, `sessions/${sessionId}/matches`, m.id)); }
+    await deleteDoc(doc(db,'sessions',sessionId));
+    if (currentSessionId === sessionId){ currentSessionId = null; adminTab = 'sessions'; }
+    toast(t('ลบแล้ว','Deleted'));
+    render();
+  }catch(e){
+    console.error(e);
+    toast(t('เกิดข้อผิดพลาด ลองใหม่อีกครั้ง','Something went wrong, try again'), '#B23B3B');
+  }
 }
 
 /* ---------------- ADMIN: CHECK-IN ---------------- */
@@ -902,7 +918,7 @@ function renderAdminSessions(){
           ${s.status==='upcoming'?`<button class="btn btn-olive btn-sm" onclick="startSession('${s.id}')">${t('เริ่ม','Start')}</button>`:''}
           ${s.status==='active'?`<button class="btn btn-outline btn-sm" onclick="openSessionDetail('${s.id}')">${t('จัดการ','Manage')}</button>`:''}
           ${s.status==='completed'?`<button class="btn btn-outline btn-sm" onclick="openSessionDetail('${s.id}')">🏆 ${t('สรุปผล','Summary')}</button>`:''}
-          ${s.status==='upcoming'?`<button class="btn btn-danger btn-sm" onclick="deleteSessionConfirm('${s.id}')">${t('ลบ','Delete')}</button>`:''}
+          <button class="btn btn-danger btn-sm" onclick="deleteSessionConfirm('${s.id}')">${t('ลบ','Delete')}</button>
         </div>
       </div>`).join('') : `<div class="empty-note">${t('ยังไม่มี session','No sessions yet')}</div>`}
   `;
