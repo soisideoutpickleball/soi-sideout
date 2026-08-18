@@ -212,7 +212,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   getFirestore, collection, doc, setDoc, addDoc, updateDoc, deleteDoc,
-  onSnapshot, query, orderBy, serverTimestamp, getDocs, getDoc
+  onSnapshot, query, orderBy, serverTimestamp, getDocs, getDoc, increment, deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -234,7 +234,8 @@ let sessions = [];         // all sessions from DB
 let currentSessionId = null; // session admin is currently managing
 let currentParticipants = []; // participants of currentSessionId
 let currentMatches = [];
-let pendingMatch = null;   // {team1:[id,id], team2:[id,id]}
+// pendingMatches now lives on the session document itself (field: pendingMatches),
+// so it survives page reloads / disconnects. See getPendingMatches() helper below.
 let filterGender = 'all';
 let filterSort = 'score';
 let filterMinGames = 0;
@@ -563,7 +564,6 @@ window.executeReset = async function(){
     toast(t('ล้างข้อมูลทั้งหมดแล้ว','All data has been reset'), '#5B6E4E');
     closeModal();
     currentSessionId = null;
-    pendingMatch = null;
     adminTab = 'home';
     render();
   }catch(e){
@@ -598,6 +598,10 @@ window.openCreateSession = function(){
           <div class="field"><label>${t('เวลาเริ่ม','Start time')}</label><input id="sStart" type="time" value="15:00"></div>
           <div class="field"><label>${t('เวลาจบ','End time')}</label><input id="sEnd" type="time" value="18:00"></div>
         </div>
+        <div class="row2">
+          <div class="field"><label>${t('จำนวนสนาม','Number of courts')}</label><input id="sCourts" type="number" min="1" max="10" value="1"></div>
+          <div class="field"><label>${t('นาที/เกม (เฉลี่ย)','Avg minutes/game')}</label><input id="sAvgMin" type="number" min="1" max="60" value="10"></div>
+        </div>
         <div class="row2" style="margin-top:14px;">
           <button class="btn btn-outline btn-block" onclick="closeModal()">${t('ยกเลิก','Cancel')}</button>
           <button class="btn btn-primary btn-block" onclick="submitCreateSession()">${t('สร้าง','Create')}</button>
@@ -611,9 +615,11 @@ window.submitCreateSession = async function(){
   const location = document.getElementById('sLocation').value.trim();
   const startTime = document.getElementById('sStart').value;
   const endTime = document.getElementById('sEnd').value;
+  const courts = parseInt(document.getElementById('sCourts').value) || 1;
+  const avgGameMinutes = parseInt(document.getElementById('sAvgMin').value) || 10;
   if (!date||!location||!startTime||!endTime){ toast(t('กรอกข้อมูลให้ครบ','Fill in all fields'), '#B23B3B'); return; }
   await addDoc(collection(db,'sessions'), {
-    name: name || null, date, location, startTime, endTime, status:'upcoming', createdAt: serverTimestamp()
+    name: name || null, date, location, startTime, endTime, courts, avgGameMinutes, status:'upcoming', createdAt: serverTimestamp()
   });
   toast(t('สร้าง session แล้ว','Session created'), '#5B6E4E');
   closeModal();
@@ -698,15 +704,24 @@ window.reactivatePlayer = async function(participantId){
 }
 
 /* ---------------- ADMIN: MATCH GENERATION ---------------- */
-window.generateMatch = function(){
-  const active = currentParticipants.filter(p=>p.status==='active');
-  if (active.length < 4){ toast(t('ต้องมีผู้เล่น active อย่างน้อย 4 คน','Need at least 4 active players'), '#B23B3B'); return; }
-
-  // Pick 4 players: prioritize fewer games played, but randomize within players
-  // who are tied on games played (instead of always picking the earliest-waiting
-  // group, which caused a predictable A-B-A-B alternating pattern).
+function getPendingMatches(){
+  const s = sessions.find(x=>x.id===currentSessionId);
+  return (s && s.pendingMatches) || {};
+}
+function getBusyPlayerIds(excludeCourt){
+  let busy = [];
+  const pending = getPendingMatches();
+  Object.keys(pending).forEach(courtKey=>{
+    if (excludeCourt !== undefined && String(courtKey) === String(excludeCourt)) return;
+    const m = pending[courtKey];
+    busy = busy.concat(m.team1, m.team2);
+  });
+  return busy;
+}
+function pickFourFair(pool){
+  // Prioritize fewer games played, randomize within ties.
   const byGames = {};
-  active.forEach(p=>{
+  pool.forEach(p=>{
     const g = p.gamesPlayedToday||0;
     (byGames[g] = byGames[g]||[]).push(p);
   });
@@ -718,9 +733,10 @@ window.generateMatch = function(){
     four = four.concat(shuffledTier.slice(0, need));
     if (four.length >= 4) break;
   }
+  return four;
+}
+function pairFour(four){
   const ids = four.map(p=>p.id);
-
-  // try pairing avoiding last partner
   let bestPairing = null;
   const pairings = [
     [[ids[0],ids[1]],[ids[2],ids[3]]],
@@ -734,35 +750,58 @@ window.generateMatch = function(){
     const t2ok = !(four.find(p=>p.id===t2[0]).lastPartnerId === t2[1]);
     if (t1ok && t2ok){ bestPairing = pairing; break; }
   }
-  if (!bestPairing) bestPairing = shuffled[0];
-
-  pendingMatch = { team1: bestPairing[0], team2: bestPairing[1] };
-  render();
+  return bestPairing || shuffled[0];
 }
-window.cancelPendingMatch = function(){
-  pendingMatch = null;
-  render();
+function sessionDurationMinutes(s){
+  if (!s.startTime || !s.endTime) return 0;
+  const [sh,sm] = s.startTime.split(':').map(Number);
+  const [eh,em] = s.endTime.split(':').map(Number);
+  return (eh*60+em) - (sh*60+sm);
 }
-window.reshuffleMatch = function(){
-  generateMatch();
+function plannedGamesEstimate(s){
+  const courts = s.courts || 1;
+  const avg = s.avgGameMinutes || 10;
+  const duration = sessionDurationMinutes(s);
+  const roundsPlanned = duration>0 && avg>0 ? Math.floor(duration/avg) : 0;
+  return { courts, avg, duration, roundsPlanned, totalGames: roundsPlanned*courts };
 }
-window.confirmAndRecordMatch = async function(){
-  const s1 = parseInt(document.getElementById('scoreT1').value);
-  const s2 = parseInt(document.getElementById('scoreT2').value);
+window.generateMatchForCourt = async function(courtNum){
+  const busy = getBusyPlayerIds(courtNum);
+  const available = currentParticipants.filter(p=>p.status==='active' && !busy.includes(p.id));
+  if (available.length < 4){ toast(t('ผู้เล่นว่างไม่พอสำหรับสนามนี้ (ต้องการ 4 คน)','Not enough free players for this court (need 4)'), '#B23B3B'); return; }
+  const four = pickFourFair(available);
+  const bestPairing = pairFour(four);
+  await updateDoc(doc(db,'sessions',currentSessionId), {
+    [`pendingMatches.${courtNum}`]: { team1: bestPairing[0], team2: bestPairing[1] }
+  });
+}
+window.cancelCourtMatch = async function(courtNum){
+  await updateDoc(doc(db,'sessions',currentSessionId), {
+    [`pendingMatches.${courtNum}`]: deleteField()
+  });
+}
+window.reshuffleCourtMatch = function(courtNum){
+  generateMatchForCourt(courtNum);
+}
+window.confirmCourtMatch = async function(courtNum){
+  const s1 = parseInt(document.getElementById(`scoreT1_${courtNum}`).value);
+  const s2 = parseInt(document.getElementById(`scoreT2_${courtNum}`).value);
   if (isNaN(s1)||isNaN(s2)){ toast(t('กรอกคะแนนให้ครบ','Enter both scores'), '#B23B3B'); return; }
   if (s1===s2){ toast(t('คะแนนห้ามเท่ากัน (ไม่มีเสมอ)','Scores cannot be equal (no ties)'), '#B23B3B'); return; }
 
-  const [t1a,t1b] = pendingMatch.team1;
-  const [t2a,t2b] = pendingMatch.team2;
+  const m = getPendingMatches()[courtNum];
+  if (!m) return;
+  const [t1a,t1b] = m.team1;
+  const [t2a,t2b] = m.team2;
   const winnerTeam = s1>s2 ? 1 : 2;
   const diff = Math.abs(s1-s2);
   const winIds = winnerTeam===1 ? [t1a,t1b] : [t2a,t2b];
   const loseIds = winnerTeam===1 ? [t2a,t2b] : [t1a,t1b];
 
-  const roundNumber = (currentMatches[0]?.roundNumber || 0) + 1;
+  const matchNumber = currentMatches.length + 1;
 
   await addDoc(collection(db, `sessions/${currentSessionId}/matches`), {
-    roundNumber,
+    roundNumber: matchNumber, court: courtNum,
     team1:{p1:t1a,p2:t1b}, team2:{p1:t2a,p2:t2b},
     score1:s1, score2:s2, winnerTeam, scoreDiff:diff,
     playedAt: serverTimestamp()
@@ -770,19 +809,13 @@ window.confirmAndRecordMatch = async function(){
 
   // update players collection
   for (const id of winIds){
-    const p = playerById(id);
     await updateDoc(doc(db,'players',id), {
-      totalScore:(p.totalScore||1000)+diff,
-      totalWins:(p.totalWins||0)+1,
-      totalGamesPlayed:(p.totalGamesPlayed||0)+1
+      totalScore: increment(diff), totalWins: increment(1), totalGamesPlayed: increment(1)
     });
   }
   for (const id of loseIds){
-    const p = playerById(id);
     await updateDoc(doc(db,'players',id), {
-      totalScore:(p.totalScore||1000)-diff,
-      totalLosses:(p.totalLosses||0)+1,
-      totalGamesPlayed:(p.totalGamesPlayed||0)+1
+      totalScore: increment(-diff), totalLosses: increment(1), totalGamesPlayed: increment(1)
     });
   }
   // update participants: gamesPlayedToday, lastPartnerId, waitingSince
@@ -798,8 +831,80 @@ window.confirmAndRecordMatch = async function(){
     });
   }
 
+  await updateDoc(doc(db,'sessions',currentSessionId), {
+    [`pendingMatches.${courtNum}`]: deleteField()
+  });
+
   toast(t('บันทึกผลแล้ว','Result saved'), '#5B6E4E');
-  pendingMatch = null;
+}
+
+/* ---------------- EDIT A SAVED MATCH SCORE ---------------- */
+window.openEditMatchScore = function(matchId){
+  const m = currentMatches.find(x=>x.id===matchId);
+  if (!m) return;
+  const p1a=playerById(m.team1.p1), p1b=playerById(m.team1.p2);
+  const p2a=playerById(m.team2.p1), p2b=playerById(m.team2.p2);
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="overlay show center">
+      <div class="sheet" style="max-width:340px;">
+        <div class="sheet-title display">✏️ ${t('แก้ไขคะแนน','Edit score')}</div>
+        <div class="team-row">
+          <div class="team-names">${esc(p1a?.name)} + ${esc(p1b?.name)}</div>
+          <input class="score-input" id="editScoreT1" type="number" value="${m.score1}">
+        </div>
+        <div class="vs-label">VS</div>
+        <div class="team-row">
+          <div class="team-names">${esc(p2a?.name)} + ${esc(p2b?.name)}</div>
+          <input class="score-input" id="editScoreT2" type="number" value="${m.score2}">
+        </div>
+        <div style="font-size:11px;color:#B3A594;margin-top:10px;line-height:1.5;">${t('ระบบจะปรับคะแนนสะสม (Leaderboard) ของผู้เล่นทั้ง 4 คนให้ถูกต้องอัตโนมัติ','Player leaderboard totals for all 4 players will be automatically recalculated.')}</div>
+        <div class="row2" style="margin-top:14px;">
+          <button class="btn btn-outline btn-block" onclick="closeModal()">${t('ยกเลิก','Cancel')}</button>
+          <button class="btn btn-primary btn-block" onclick="submitEditMatchScore('${matchId}')">${t('บันทึก','Save')}</button>
+        </div>
+      </div>
+    </div>`;
+}
+window.submitEditMatchScore = async function(matchId){
+  const s1 = parseInt(document.getElementById('editScoreT1').value);
+  const s2 = parseInt(document.getElementById('editScoreT2').value);
+  if (isNaN(s1)||isNaN(s2)){ toast(t('กรอกคะแนนให้ครบ','Enter both scores'), '#B23B3B'); return; }
+  if (s1===s2){ toast(t('คะแนนห้ามเท่ากัน (ไม่มีเสมอ)','Scores cannot be equal (no ties)'), '#B23B3B'); return; }
+
+  const m = currentMatches.find(x=>x.id===matchId);
+  if (!m) return;
+
+  // Revert the OLD result's effect on player totals
+  const oldDiff = m.scoreDiff;
+  const oldWinIds = m.winnerTeam===1 ? [m.team1.p1,m.team1.p2] : [m.team2.p1,m.team2.p2];
+  const oldLoseIds = m.winnerTeam===1 ? [m.team2.p1,m.team2.p2] : [m.team1.p1,m.team1.p2];
+  for (const id of oldWinIds){
+    await updateDoc(doc(db,'players',id), { totalScore: increment(-oldDiff), totalWins: increment(-1) });
+  }
+  for (const id of oldLoseIds){
+    await updateDoc(doc(db,'players',id), { totalScore: increment(oldDiff), totalLosses: increment(-1) });
+  }
+
+  // Apply the NEW result
+  const newWinnerTeam = s1>s2 ? 1 : 2;
+  const newDiff = Math.abs(s1-s2);
+  const newWinIds = newWinnerTeam===1 ? [m.team1.p1,m.team1.p2] : [m.team2.p1,m.team2.p2];
+  const newLoseIds = newWinnerTeam===1 ? [m.team2.p1,m.team2.p2] : [m.team1.p1,m.team1.p2];
+  for (const id of newWinIds){
+    await updateDoc(doc(db,'players',id), { totalScore: increment(newDiff), totalWins: increment(1) });
+  }
+  for (const id of newLoseIds){
+    await updateDoc(doc(db,'players',id), { totalScore: increment(-newDiff), totalLosses: increment(1) });
+  }
+
+  await updateDoc(doc(db, `sessions/${currentSessionId}/matches`, matchId), {
+    score1: s1, score2: s2, winnerTeam: newWinnerTeam, scoreDiff: newDiff,
+    edited: true, editedAt: Date.now()
+  });
+
+  toast(t('แก้ไขคะแนนแล้ว','Score updated'), '#5B6E4E');
+  closeModal();
 }
 
 /* ---------------- RENDER ---------------- */
@@ -920,7 +1025,7 @@ function renderAdminSessions(){
       <div class="list-item" style="align-items:flex-start;">
         <div style="flex:1;cursor:pointer;" onclick="openSessionDetail('${s.id}')">
           <div class="name">${esc(sessionTitle(s))} <span class="status-tag status-${s.status}">${s.status}</span></div>
-          <div class="meta">${s.name?`${esc(fmtDate(s.date))} · `:''}📍 ${esc(s.location)} · 🕒 ${esc(s.startTime)}-${esc(s.endTime)}</div>
+          <div class="meta">${s.name?`${esc(fmtDate(s.date))} · `:''}📍 ${esc(s.location)} · 🕒 ${esc(s.startTime)}-${esc(s.endTime)}${s.courts?` · 🏸 ${s.courts} ${t('สนาม','courts')}`:''}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${s.status==='upcoming'?`<button class="btn btn-olive btn-sm" onclick="startSession('${s.id}')">${t('เริ่ม','Start')}</button>`:''}
@@ -970,8 +1075,18 @@ function renderAdminLive(){
       <div class="banner-meta">${session.name?`<span>📅 ${esc(fmtDate(session.date))}</span>`:''}<span>📍 ${esc(session.location)}</span><span>🕒 ${esc(session.startTime)}-${esc(session.endTime)}</span></div>
     </div>
 
-    ${pendingMatch ? renderPendingMatch() : `
-      <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="generateMatch()">🎲 ${t('สุ่มจับคู่ Match ถัดไป','Generate next match')}</button>`}
+    ${(()=>{
+      const planned = plannedGamesEstimate(session);
+      const courtsCount = session.courts || 1;
+      return `
+      <div style="background:var(--cream-card);border:1.5px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#8A7D6C;font-weight:600;line-height:1.6;">
+        🏸 ${courtsCount} ${t('สนาม','courts')} · ${t('เฉลี่ย','avg')} ${planned.avg} ${t('นาที/เกม','min/game')}<br>
+        ${planned.totalGames>0 ? `${t('แผน','Planned')}: ~${planned.totalGames} ${t('เกม','games')} (${planned.roundsPlanned} ${t('รอบ','rounds')} × ${courtsCount} ${t('สนาม','courts')}) · ` : ''}${t('เล่นไปแล้ว','Played so far')} ${currentMatches.length} ${t('เกม','games')}
+      </div>
+      <div class="section-label">${t('สนามแข่งขัน','Courts')}</div>
+      ${Array.from({length: courtsCount}, (_,i)=>i+1).map(c=>renderCourtCard(c)).join('')}
+      `;
+    })()}
 
     <div class="section-label">${t('Check-in ผู้เล่น','Check-in players')}</div>
     <div class="field" style="margin-bottom:8px;">
@@ -1076,27 +1191,35 @@ function renderAdminSummary(){
   `;
 }
 
-function renderPendingMatch(){
-  const [t1a,t1b] = pendingMatch.team1;
-  const [t2a,t2b] = pendingMatch.team2;
+function renderCourtCard(courtNum){
+  const m = getPendingMatches()[courtNum];
+  if (!m){
+    return `
+    <div class="match-card" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-weight:700;font-size:13px;">🏸 ${t('สนาม','Court')} ${courtNum} — <span style="color:#B3A594;">${t('ว่าง','Free')}</span></div>
+      <button class="btn btn-primary btn-sm" onclick="generateMatchForCourt(${courtNum})">🎲 ${t('สุ่ม','Generate')}</button>
+    </div>`;
+  }
+  const [t1a,t1b] = m.team1;
+  const [t2a,t2b] = m.team2;
   const p1a=playerById(t1a), p1b=playerById(t1b), p2a=playerById(t2a), p2b=playerById(t2b);
   return `
-    <div class="match-card" style="margin-bottom:16px;">
-      <div class="section-label" style="margin:0 0 10px;">${t('Match ใหม่ — กรอกคะแนนแล้วบันทึก','New match — enter scores and save')}</div>
+    <div class="match-card" style="margin-bottom:10px;">
+      <div class="section-label" style="margin:0 0 10px;">🏸 ${t('สนาม','Court')} ${courtNum}</div>
       <div class="team-row">
         <div class="team-names">${esc(p1a?.name)} + ${esc(p1b?.name)}</div>
-        <input class="score-input" id="scoreT1" type="number" placeholder="0">
+        <input class="score-input" id="scoreT1_${courtNum}" type="number" placeholder="0">
       </div>
       <div class="vs-label">VS</div>
       <div class="team-row">
         <div class="team-names">${esc(p2a?.name)} + ${esc(p2b?.name)}</div>
-        <input class="score-input" id="scoreT2" type="number" placeholder="0">
+        <input class="score-input" id="scoreT2_${courtNum}" type="number" placeholder="0">
       </div>
       <div class="row2" style="margin-top:12px;">
-        <button class="btn btn-outline btn-block" onclick="reshuffleMatch()">🔄 ${t('สุ่มใหม่','Reshuffle')}</button>
-        <button class="btn btn-outline btn-block" onclick="cancelPendingMatch()">${t('ยกเลิก','Cancel')}</button>
+        <button class="btn btn-outline btn-block" onclick="reshuffleCourtMatch(${courtNum})">🔄 ${t('สุ่มใหม่','Reshuffle')}</button>
+        <button class="btn btn-outline btn-block" onclick="cancelCourtMatch(${courtNum})">${t('ยกเลิก','Cancel')}</button>
       </div>
-      <button class="btn btn-primary btn-block" style="margin-top:8px;" onclick="confirmAndRecordMatch()">✅ ${t('ยืนยันบันทึกผล','Confirm & save result')}</button>
+      <button class="btn btn-primary btn-block" style="margin-top:8px;" onclick="confirmCourtMatch(${courtNum})">✅ ${t('ยืนยันบันทึกผล','Confirm & save result')}</button>
     </div>`;
 }
 
@@ -1106,7 +1229,10 @@ function renderMatchHistory(m){
   const w1 = m.winnerTeam===1;
   return `
     <div class="match-card">
-      <div style="font-size:11px;color:#B3A594;font-weight:700;margin-bottom:6px;">${t('รอบที่','Round')} ${m.roundNumber}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:11px;color:#B3A594;font-weight:700;">${m.court?`${t('สนาม','Court')} ${m.court} · `:''}${t('เกมที่','Game')} ${m.roundNumber}${m.edited?` · ✏️ ${t('แก้ไขแล้ว','edited')}`:''}</div>
+        ${isAdmin ? `<button class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:11px;" onclick="openEditMatchScore('${m.id}')">✏️ ${t('แก้ไข','Edit')}</button>` : ''}
+      </div>
       <div class="team-row">
         <div class="team-names" style="color:${w1?'var(--olive)':'var(--ink)'}">${w1?'🏆 ':''}${esc(p1a?.name)} + ${esc(p1b?.name)}</div>
         <div class="team-names">${m.score1}</div>
