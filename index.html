@@ -462,7 +462,7 @@ window.openPlayerDetail = async function(playerId){
       const snap = await getDocs(collection(db, `sessions/${s.id}/matches`));
       snap.forEach(d=>{
         const data = d.data();
-        if ([data.team1.p1, data.team1.p2, data.team2.p1, data.team2.p2].includes(playerId)){
+        if ((data.status||'played')==='played' && [data.team1.p1, data.team1.p2, data.team2.p1, data.team2.p2].includes(playerId)){
           history.push({ id:d.id, sessionId:s.id, ...data });
         }
       });
@@ -907,6 +907,148 @@ window.submitEditMatchScore = async function(matchId){
   closeModal();
 }
 
+/* ---------------- FULL SESSION SCHEDULE ---------------- */
+window.generateFullSchedule = async function(){
+  const session = sessions.find(s=>s.id===currentSessionId);
+  if (!session) return;
+  const active = currentParticipants.filter(p=>p.status==='active');
+  if (active.length < 4){ toast(t('ต้องมีผู้เล่น active อย่างน้อย 4 คน','Need at least 4 active players'), '#B23B3B'); return; }
+  const planned = plannedGamesEstimate(session);
+  if (planned.roundsPlanned < 1){ toast(t('ช่วงเวลาของ session สั้นเกินไปสำหรับสร้างตาราง เช็คเวลาเริ่ม-จบ และนาที/เกม','Session time window is too short to build a schedule — check start/end time and minutes/game'), '#B23B3B'); return; }
+
+  const existingScheduled = currentMatches.filter(m => (m.status||'played')==='scheduled');
+  if (existingScheduled.length > 0){
+    if (!confirm(t(`มีตารางที่ยังไม่เล่นอยู่ ${existingScheduled.length} นัด ต้องการสร้างตารางใหม่ทับหรือไม่? (นัดที่เล่นและบันทึกผลแล้วจะไม่หาย)`, `There are ${existingScheduled.length} unplayed scheduled matches. Regenerate the schedule? (Already-played matches are not affected)`))) return;
+    for (const m of existingScheduled){
+      await deleteDoc(doc(db, `sessions/${currentSessionId}/matches`, m.id));
+    }
+  }
+
+  // Local simulation, seeded from live gamesPlayedToday/lastPartnerId so it continues fairly
+  let simPlayers = active.map(p=>({ id:p.id, gamesPlayedToday: p.gamesPlayedToday||0, lastPartnerId: p.lastPartnerId||null }));
+  const scheduled = [];
+  for (let round=1; round<=planned.roundsPlanned; round++){
+    let usedThisRound = [];
+    for (let court=1; court<=planned.courts; court++){
+      const pool = simPlayers.filter(p=>!usedThisRound.includes(p.id));
+      if (pool.length < 4) break;
+      const four = pickFourFair(pool);
+      const pairing = pairFour(four);
+      scheduled.push({ round, court, team1: pairing[0], team2: pairing[1] });
+      const [a,b] = pairing[0], [c,d] = pairing[1];
+      four.forEach(p=>{ p.gamesPlayedToday++; usedThisRound.push(p.id); });
+      simPlayers.find(p=>p.id===a).lastPartnerId = b;
+      simPlayers.find(p=>p.id===b).lastPartnerId = a;
+      simPlayers.find(p=>p.id===c).lastPartnerId = d;
+      simPlayers.find(p=>p.id===d).lastPartnerId = c;
+    }
+  }
+  if (scheduled.length===0){ toast(t('สร้างตารางไม่สำเร็จ (ผู้เล่นน้อยเกินไป)','Could not build a schedule (not enough players)'), '#B23B3B'); return; }
+
+  for (const s of scheduled){
+    await addDoc(collection(db, `sessions/${currentSessionId}/matches`), {
+      roundNumber: s.round, court: s.court, status:'scheduled',
+      team1:{p1:s.team1[0],p2:s.team1[1]}, team2:{p1:s.team2[0],p2:s.team2[1]},
+      score1:null, score2:null, winnerTeam:null, scoreDiff:null,
+      createdAt: serverTimestamp()
+    });
+  }
+  toast(t(`สร้างตารางแล้ว ${scheduled.length} เกม`, `Schedule created — ${scheduled.length} games`), '#5B6E4E');
+}
+window.openSwapPlayers = function(matchId){
+  const m = currentMatches.find(x=>x.id===matchId);
+  if (!m) return;
+  const activeCheckedIn = currentParticipants.filter(p=>p.status==='active');
+  const opts = (selectedId) => activeCheckedIn.map(p=>`<option value="${p.id}" ${p.id===selectedId?'selected':''}>${esc(p.name)}</option>`).join('');
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="overlay show center">
+      <div class="sheet" style="max-width:360px;">
+        <div class="sheet-title display">🔁 ${t('สลับผู้เล่น','Swap players')} — ${t('รอบที่','Round')} ${m.roundNumber}${m.court?` · ${t('สนาม','Court')} ${m.court}`:''}</div>
+        <div class="field"><label>${t('ทีม 1 - คนที่ 1','Team 1 - Player 1')}</label><select id="swapT1P1">${opts(m.team1.p1)}</select></div>
+        <div class="field"><label>${t('ทีม 1 - คนที่ 2','Team 1 - Player 2')}</label><select id="swapT1P2">${opts(m.team1.p2)}</select></div>
+        <div class="field"><label>${t('ทีม 2 - คนที่ 1','Team 2 - Player 1')}</label><select id="swapT2P1">${opts(m.team2.p1)}</select></div>
+        <div class="field"><label>${t('ทีม 2 - คนที่ 2','Team 2 - Player 2')}</label><select id="swapT2P2">${opts(m.team2.p2)}</select></div>
+        <div style="font-size:11px;color:#B3A594;margin-top:6px;line-height:1.5;">${t('เลือกได้อิสระ — ระบบไม่เช็คว่าคนนั้นเล่นสนามอื่นอยู่พร้อมกันไหม ให้ admin ดูหน้างานเอง','Free selection — the system does not check whether someone is on another court at the same time; use your judgment.')}</div>
+        <div class="row2" style="margin-top:14px;">
+          <button class="btn btn-outline btn-block" onclick="closeModal()">${t('ยกเลิก','Cancel')}</button>
+          <button class="btn btn-primary btn-block" onclick="submitSwapPlayers('${matchId}')">${t('บันทึก','Save')}</button>
+        </div>
+      </div>
+    </div>`;
+}
+window.submitSwapPlayers = async function(matchId){
+  const a = document.getElementById('swapT1P1').value;
+  const b = document.getElementById('swapT1P2').value;
+  const c = document.getElementById('swapT2P1').value;
+  const d = document.getElementById('swapT2P2').value;
+  if (new Set([a,b,c,d]).size !== 4){ toast(t('เลือกผู้เล่นซ้ำกันไม่ได้','Cannot select the same player twice'), '#B23B3B'); return; }
+  await updateDoc(doc(db, `sessions/${currentSessionId}/matches`, matchId), {
+    team1:{p1:a,p2:b}, team2:{p1:c,p2:d}
+  });
+  toast(t('สลับผู้เล่นแล้ว','Players swapped'), '#5B6E4E');
+  closeModal();
+}
+window.openPlayScheduledMatch = function(matchId){
+  const m = currentMatches.find(x=>x.id===matchId);
+  if (!m) return;
+  const p1a=playerById(m.team1.p1), p1b=playerById(m.team1.p2);
+  const p2a=playerById(m.team2.p1), p2b=playerById(m.team2.p2);
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="overlay show center">
+      <div class="sheet" style="max-width:340px;">
+        <div class="sheet-title display">${t('บันทึกผล','Record result')} — ${t('รอบที่','Round')} ${m.roundNumber}${m.court?` · ${t('สนาม','Court')} ${m.court}`:''}</div>
+        <div class="team-row">
+          <div class="team-names">${esc(p1a?.name)} + ${esc(p1b?.name)}</div>
+          <input class="score-input" id="playScoreT1" type="number" placeholder="0">
+        </div>
+        <div class="vs-label">VS</div>
+        <div class="team-row">
+          <div class="team-names">${esc(p2a?.name)} + ${esc(p2b?.name)}</div>
+          <input class="score-input" id="playScoreT2" type="number" placeholder="0">
+        </div>
+        <div class="row2" style="margin-top:14px;">
+          <button class="btn btn-outline btn-block" onclick="closeModal()">${t('ยกเลิก','Cancel')}</button>
+          <button class="btn btn-primary btn-block" onclick="submitPlayScheduledMatch('${matchId}')">✅ ${t('บันทึก','Save')}</button>
+        </div>
+      </div>
+    </div>`;
+}
+window.submitPlayScheduledMatch = async function(matchId){
+  const s1 = parseInt(document.getElementById('playScoreT1').value);
+  const s2 = parseInt(document.getElementById('playScoreT2').value);
+  if (isNaN(s1)||isNaN(s2)){ toast(t('กรอกคะแนนให้ครบ','Enter both scores'), '#B23B3B'); return; }
+  if (s1===s2){ toast(t('คะแนนห้ามเท่ากัน (ไม่มีเสมอ)','Scores cannot be equal (no ties)'), '#B23B3B'); return; }
+  const m = currentMatches.find(x=>x.id===matchId);
+  if (!m) return;
+  const winnerTeam = s1>s2 ? 1 : 2;
+  const diff = Math.abs(s1-s2);
+  const winIds = winnerTeam===1 ? [m.team1.p1,m.team1.p2] : [m.team2.p1,m.team2.p2];
+  const loseIds = winnerTeam===1 ? [m.team2.p1,m.team2.p2] : [m.team1.p1,m.team1.p2];
+
+  await updateDoc(doc(db, `sessions/${currentSessionId}/matches`, matchId), {
+    score1:s1, score2:s2, winnerTeam, scoreDiff:diff, status:'played', playedAt: serverTimestamp()
+  });
+  for (const id of winIds){
+    await updateDoc(doc(db,'players',id), { totalScore: increment(diff), totalWins: increment(1), totalGamesPlayed: increment(1) });
+  }
+  for (const id of loseIds){
+    await updateDoc(doc(db,'players',id), { totalScore: increment(-diff), totalLosses: increment(1), totalGamesPlayed: increment(1) });
+  }
+  const updates = [ [m.team1.p1,m.team1.p2], [m.team1.p2,m.team1.p1], [m.team2.p1,m.team2.p2], [m.team2.p2,m.team2.p1] ];
+  for (const [id, partnerId] of updates){
+    const part = currentParticipants.find(p=>p.id===id);
+    await updateDoc(doc(db, `sessions/${currentSessionId}/participants`, id), {
+      gamesPlayedToday:(part?.gamesPlayedToday||0)+1,
+      lastPartnerId: partnerId,
+      waitingSince: serverTimestamp()
+    });
+  }
+  toast(t('บันทึกผลแล้ว','Result saved'), '#5B6E4E');
+  closeModal();
+}
+
 /* ---------------- RENDER ---------------- */
 function render(){
   const root = document.getElementById('app');
@@ -1067,6 +1209,10 @@ function renderAdminLive(){
   const leftEarly = currentParticipants.filter(p=>p.status==='left_early');
   const checkedInIds = currentParticipants.map(p=>p.id);
   const notCheckedIn = [...players].filter(p=>!checkedInIds.includes(p.id)).sort((a,b)=>a.name.localeCompare(b.name));
+  const planned = plannedGamesEstimate(session);
+  const courtsCount = session.courts || 1;
+  const playedCount = currentMatches.filter(m=>(m.status||'played')==='played').length;
+  const scheduleOrdered = [...currentMatches].sort((a,b)=> a.roundNumber-b.roundNumber || (a.court||0)-(b.court||0));
 
   return `
     <div class="banner ${session.status==='active'?'live':''}" style="margin-bottom:14px;">
@@ -1075,20 +1221,17 @@ function renderAdminLive(){
       <div class="banner-meta">${session.name?`<span>📅 ${esc(fmtDate(session.date))}</span>`:''}<span>📍 ${esc(session.location)}</span><span>🕒 ${esc(session.startTime)}-${esc(session.endTime)}</span></div>
     </div>
 
-    ${(()=>{
-      const planned = plannedGamesEstimate(session);
-      const courtsCount = session.courts || 1;
-      return `
-      <div style="background:var(--cream-card);border:1.5px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#8A7D6C;font-weight:600;line-height:1.6;">
-        🏸 ${courtsCount} ${t('สนาม','courts')} · ${t('เฉลี่ย','avg')} ${planned.avg} ${t('นาที/เกม','min/game')}<br>
-        ${planned.totalGames>0 ? `${t('แผน','Planned')}: ~${planned.totalGames} ${t('เกม','games')} (${planned.roundsPlanned} ${t('รอบ','rounds')} × ${courtsCount} ${t('สนาม','courts')}) · ` : ''}${t('เล่นไปแล้ว','Played so far')} ${currentMatches.length} ${t('เกม','games')}
-      </div>
-      <div class="section-label">${t('สนามแข่งขัน','Courts')}</div>
-      ${Array.from({length: courtsCount}, (_,i)=>i+1).map(c=>renderCourtCard(c)).join('')}
-      `;
-    })()}
+    <div style="background:var(--cream-card);border:1.5px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:14px;font-size:12px;color:#8A7D6C;font-weight:600;line-height:1.6;">
+      🏸 ${courtsCount} ${t('สนาม','courts')} · ${t('เฉลี่ย','avg')} ${planned.avg} ${t('นาที/เกม','min/game')}<br>
+      ${planned.totalGames>0 ? `${t('แผน','Planned')}: ~${planned.totalGames} ${t('เกม','games')} (${planned.roundsPlanned} ${t('รอบ','rounds')} × ${courtsCount} ${t('สนาม','courts')}) · ` : ''}${t('เล่นไปแล้ว','Played so far')} ${playedCount} ${t('เกม','games')}
+    </div>
 
-    <div class="section-label">${t('Check-in ผู้เล่น','Check-in players')}</div>
+    <button class="btn btn-primary btn-block" style="margin-bottom:16px;" onclick="generateFullSchedule()">📋 ${t('สร้างตารางทั้ง Session','Generate full session schedule')}</button>
+
+    <div class="section-label">${t('ตารางการแข่งขัน','Match schedule')}</div>
+    ${scheduleOrdered.length ? scheduleOrdered.map(m=>renderAnyMatchCard(m)).join('') : `<div class="empty-note">${t('ยังไม่มีตาราง — กด "สร้างตารางทั้ง Session" ด้านบน','No schedule yet — tap "Generate full session schedule" above')}</div>`}
+
+    <div class="section-label" style="margin-top:16px;">${t('Check-in ผู้เล่น','Check-in players')}</div>
     <div class="field" style="margin-bottom:8px;">
       <select id="checkinSelect">
         <option value="">${t(`— เลือกผู้เล่น (${notCheckedIn.length} คนในระบบ) —`, `— Select player (${notCheckedIn.length} in database) —`)}</option>
@@ -1119,8 +1262,9 @@ function renderAdminLive(){
         </div>`).join('')}
     ` : ''}
 
-    <div class="section-label" style="margin-top:16px;">${t('ผลการแข่งขันวันนี้','Match results today')}</div>
-    ${currentMatches.length? currentMatches.map(m=>renderMatchHistory(m)).join('') : `<div class="empty-note">${t('ยังไม่มีการแข่งขัน','No matches yet')}</div>`}
+    <div class="section-label" style="margin-top:16px;">${t('เกมเพิ่มเติมนอกแผน','Extra games outside the plan')}</div>
+    <div style="font-size:11px;color:#B3A594;margin-bottom:10px;">${t('ใช้ตอนเวลาเหลือหลังเล่นตามแผนหมดแล้ว หรืออยากสุ่มเกมพิเศษเพิ่ม','Use this once the planned schedule is done, or to add a spontaneous extra game.')}</div>
+    ${Array.from({length: courtsCount}, (_,i)=>i+1).map(c=>renderCourtCard(c)).join('')}
 
     <div class="row2" style="margin-top:20px;">
       <button class="btn btn-outline btn-block" onclick="setAdminTab('sessions')">${t('กลับหน้า Sessions','Back to Sessions')}</button>
@@ -1134,7 +1278,7 @@ function computeSessionStats(){
   currentParticipants.forEach(p=>{
     stats[p.id] = { id:p.id, name:p.name, gender:p.gender, wins:0, losses:0, netScore:0, gamesPlayed:0 };
   });
-  currentMatches.forEach(m=>{
+  currentMatches.filter(m=>(m.status||'played')==='played').forEach(m=>{
     const t1ids = [m.team1.p1, m.team1.p2];
     const t2ids = [m.team2.p1, m.team2.p2];
     const w1 = m.winnerTeam===1;
@@ -1186,7 +1330,7 @@ function renderAdminSummary(){
       }).join('') : `<div class="empty-note">${t('ไม่มีข้อมูลการแข่งขัน','No match data')}</div>`}
     </div>
     <div class="section-label" style="margin-top:20px;">${t('ตารางการแข่งขันทั้งหมด','All matches this session')} · ${currentMatches.length} ${t('แมตช์','matches')}</div>
-    ${currentMatches.length ? currentMatches.map(m=>renderMatchHistory(m)).join('') : `<div class="empty-note">${t('ไม่มีการแข่งขัน','No matches')}</div>`}
+    ${currentMatches.length ? currentMatches.map(m=>renderAnyMatchCard(m)).join('') : `<div class="empty-note">${t('ไม่มีการแข่งขัน','No matches')}</div>`}
     <button class="btn btn-outline btn-block" style="margin-top:20px;" onclick="setAdminTab('sessions')">${t('กลับหน้า Sessions','Back to Sessions')}</button>
   `;
 }
@@ -1223,6 +1367,21 @@ function renderCourtCard(courtNum){
     </div>`;
 }
 
+function renderScheduledMatchCard(m){
+  const p1a=playerById(m.team1.p1), p1b=playerById(m.team1.p2);
+  const p2a=playerById(m.team2.p1), p2b=playerById(m.team2.p2);
+  return `
+    <div class="match-card" style="border-style:dashed;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:11px;color:#B3A594;font-weight:700;">${t('รอบที่','Round')} ${m.roundNumber}${m.court?` · ${t('สนาม','Court')} ${m.court}`:''} · <span style="color:var(--mustard);">${t('ยังไม่เล่น','Not played')}</span></div>
+        ${isAdmin ? `<button class="btn btn-outline btn-sm" style="padding:4px 10px;font-size:11px;" onclick="openSwapPlayers('${m.id}')">🔁 ${t('สลับ','Swap')}</button>` : ''}
+      </div>
+      <div class="team-row"><div class="team-names">${esc(p1a?.name||'?')} + ${esc(p1b?.name||'?')}</div></div>
+      <div class="vs-label">VS</div>
+      <div class="team-row"><div class="team-names">${esc(p2a?.name||'?')} + ${esc(p2b?.name||'?')}</div></div>
+      ${isAdmin ? `<button class="btn btn-primary btn-block" style="margin-top:10px;" onclick="openPlayScheduledMatch('${m.id}')">▶️ ${t('กรอกผล','Enter score')}</button>` : `<div class="empty-note" style="padding:10px 0 0;">${t('รอผลจาก admin','Waiting for result')}</div>`}
+    </div>`;
+}
 function renderMatchHistory(m){
   const p1a=playerById(m.team1.p1), p1b=playerById(m.team1.p2);
   const p2a=playerById(m.team2.p1), p2b=playerById(m.team2.p2);
@@ -1242,6 +1401,9 @@ function renderMatchHistory(m){
         <div class="team-names">${m.score2}</div>
       </div>
     </div>`;
+}
+function renderAnyMatchCard(m){
+  return (m.status||'played')==='scheduled' ? renderScheduledMatchCard(m) : renderMatchHistory(m);
 }
 
 applyStaticTranslations();
